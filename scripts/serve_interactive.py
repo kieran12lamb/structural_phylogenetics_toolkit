@@ -34,7 +34,6 @@ pipeline_lock = threading.Lock()
 
 
 def run_pipeline_thread(cmd_args):
-    global pipeline_state
     with pipeline_lock:
         pipeline_state["is_running"] = True
         pipeline_state["logs"] = [f"[System] Starting pipeline: {' '.join(cmd_args)}\n"]
