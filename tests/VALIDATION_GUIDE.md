@@ -10,9 +10,9 @@ Before executing tests, verify that the environment has `foldmason`, `iqtree`, a
 
 ```bash
 # Verify Python and binaries:
-conda run -n skills_hackathon python3 --version
-conda run -n skills_hackathon foldmason version
-conda run -n skills_hackathon iqtree --version
+conda run -n spt python3 --version
+conda run -n spt foldmason version
+conda run -n spt iqtree --version
 ```
 
 ### Expected Output:
@@ -42,7 +42,7 @@ conda run -n skills_hackathon iqtree --version
 Tests API search and structure file downloading from the Viro3D database.
 
 ```bash
-conda run -n skills_hackathon python3 viro3d_structures.py \
+conda run -n spt python3 viro3d_structures.py \
   --qualifier glycoprotein \
   --max-sequences 4 \
   --output-dir test_structures
@@ -59,7 +59,7 @@ conda run -n skills_hackathon python3 viro3d_structures.py \
 Tests structural alignment of 3D protein backbones and translation to the 3Di alphabet.
 
 ```bash
-conda run -n skills_hackathon python3 foldmason_align.py \
+conda run -n spt python3 foldmason_align.py \
   --folder test_structures \
   --output-dir test_alignment
 ```
@@ -76,7 +76,7 @@ conda run -n skills_hackathon python3 foldmason_align.py \
 Tests guide tree extraction via `structural_phylogeny.py`.
 
 ```bash
-conda run -n skills_hackathon python3 structural_phylogeny.py \
+conda run -n spt python3 structural_phylogeny.py \
   --alignment test_alignment \
   --method foldmason \
   --output-dir test_phylogeny \
@@ -94,7 +94,7 @@ conda run -n skills_hackathon python3 structural_phylogeny.py \
 Tests maximum likelihood tree inference using the AlphaFold 3Di substitution matrix with 4 Gamma rate categories (`+G4`) and 1000 ultrafast bootstrap replicates.
 
 ```bash
-conda run -n skills_hackathon python3 structural_phylogeny.py \
+conda run -n spt python3 structural_phylogeny.py \
   --alignment test_alignment \
   --method iqtree \
   --matrix alphafold \
@@ -118,7 +118,7 @@ conda run -n skills_hackathon python3 structural_phylogeny.py \
 Tests maximum likelihood tree inference using the ESMFold/ProstT5 3Di substitution matrix.
 
 ```bash
-conda run -n skills_hackathon python3 structural_phylogeny.py \
+conda run -n spt python3 structural_phylogeny.py \
   --alignment test_alignment \
   --method iqtree \
   --matrix esmfold \
@@ -141,7 +141,7 @@ conda run -n skills_hackathon python3 structural_phylogeny.py \
 Tests ModelFinder Plus (`-m MFP`) to simultaneously compare both matrices and all rate heterogeneity configurations (`Uniform`, `+I`, `+G4`, `+I+G4`, `+R4`).
 
 ```bash
-conda run -n skills_hackathon python3 structural_phylogeny.py \
+conda run -n spt python3 structural_phylogeny.py \
   --alignment test_alignment \
   --method iqtree \
   --matrix both \
@@ -166,7 +166,7 @@ conda run -n skills_hackathon python3 structural_phylogeny.py \
 Tests concurrent inference of structural (3Di) and amino acid sequence phylogenies with IQ-TREE and interactive Tanglegram generation.
 
 ```bash
-conda run -n skills_hackathon python3 scripts/viral_phylogenetics.py tree \
+conda run -n spt python3 scripts/viral_phylogenetics.py tree \
   --alignment test_alignment/foldmason.fasta_3di.fa \
   --alignment-aa test_alignment/foldmason.fasta_aa.fa \
   --tree-type both \
@@ -185,7 +185,7 @@ conda run -n skills_hackathon python3 scripts/viral_phylogenetics.py tree \
 Tests running the full pipeline from a pre-existing local directory of `.pdb` or `.cif` files without internet access.
 
 ```bash
-conda run -n skills_hackathon python3 scripts/viral_phylogenetics.py pipeline \
+conda run -n spt python3 scripts/viral_phylogenetics.py pipeline \
   --input-folder viro_glycoproteins \
   --tree-type both \
   --threads 2 \
@@ -204,7 +204,7 @@ conda run -n skills_hackathon python3 scripts/viral_phylogenetics.py pipeline \
 Tests the pipeline on a 500-structure viral glycoprotein cohort with automatic heuristic acceleration.
 
 ```bash
-conda run -n skills_hackathon python3 scripts/viral_phylogenetics.py pipeline \
+conda run -n spt python3 scripts/viral_phylogenetics.py pipeline \
   --input-folder viro_500_glycoproteins \
   --tree-type both \
   --threads 10 \
@@ -224,9 +224,9 @@ conda run -n skills_hackathon python3 scripts/viral_phylogenetics.py pipeline \
 Execute all stages in sequence to confirm pipeline integrity:
 
 ```bash
-conda run -n skills_hackathon python3 viro3d_structures.py -q glycoprotein -m 4 -o e2e_structures && \
-conda run -n skills_hackathon python3 foldmason_align.py -i e2e_structures -o e2e_alignment && \
-conda run -n skills_hackathon python3 scripts/viral_phylogenetics.py tree -a e2e_alignment/foldmason.fasta_3di.fa --tree-type both -t 2 -o e2e_phylogeny -p e2e_viral && \
+conda run -n spt python3 viro3d_structures.py -q glycoprotein -m 4 -o e2e_structures && \
+conda run -n spt python3 foldmason_align.py -i e2e_structures -o e2e_alignment && \
+conda run -n spt python3 scripts/viral_phylogenetics.py tree -a e2e_alignment/foldmason.fasta_3di.fa --tree-type both -t 2 -o e2e_phylogeny -p e2e_viral && \
 echo "=== ALL INTEGRATION TESTS PASSED ==="
 ```
 

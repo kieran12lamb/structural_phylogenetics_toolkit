@@ -1,5 +1,0 @@
-ClinicalTrials.gov Data License & Terms Notice
-Notification Date: 2026-09-04T16:18:45+01:00
-
-Please note: Data from ClinicalTrials.gov is subject to the terms and conditions outlined at https://clinicaltrials.gov/.
-Users must review and adhere to the terms of service, data use policies, and privacy considerations established by the U.S. National Library of Medicine (NLM) and National Institutes of Health (NIH).

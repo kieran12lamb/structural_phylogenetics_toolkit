@@ -50,13 +50,15 @@ def find_iqtree_bin():
     """Find iqtree binary in PATH or conda environments."""
     if shutil.which("iqtree"):
         return "iqtree"
+    conda_prefix = os.environ.get("CONDA_PREFIX", "")
     candidates = [
-        os.path.expanduser("~/miniconda3/envs/skills_hackathon/bin/iqtree"),
+        os.path.join(conda_prefix, "bin/iqtree") if conda_prefix else "",
+        os.path.expanduser("~/miniconda3/envs/spt/bin/iqtree"),
         os.path.expanduser("~/miniconda3/bin/iqtree"),
         "/opt/homebrew/bin/iqtree",
     ]
     for c in candidates:
-        if os.path.isfile(c) and os.access(c, os.X_OK):
+        if c and os.path.isfile(c) and os.access(c, os.X_OK):
             return c
     return "iqtree"
 
@@ -65,13 +67,15 @@ def find_foldmason_bin():
     """Find foldmason binary in PATH or conda environments."""
     if shutil.which("foldmason"):
         return "foldmason"
+    conda_prefix = os.environ.get("CONDA_PREFIX", "")
     candidates = [
-        os.path.expanduser("~/miniconda3/envs/skills_hackathon/bin/foldmason"),
+        os.path.join(conda_prefix, "bin/foldmason") if conda_prefix else "",
+        os.path.expanduser("~/miniconda3/envs/spt/bin/foldmason"),
         os.path.expanduser("~/miniconda3/bin/foldmason"),
         "/opt/homebrew/bin/foldmason",
     ]
     for c in candidates:
-        if os.path.isfile(c) and os.access(c, os.X_OK):
+        if c and os.path.isfile(c) and os.access(c, os.X_OK):
             return c
     return "foldmason"
 
@@ -82,16 +86,16 @@ def find_mafft_bin(mafft_bin: str = None) -> str:
         return mafft_bin
     if shutil.which("mafft"):
         return "mafft"
+    conda_prefix = os.environ.get("CONDA_PREFIX", "")
     candidates = [
-        os.path.expanduser("~/miniconda3/envs/nipah/bin/mafft"),
-        os.path.expanduser("~/miniconda3/envs/msa/bin/mafft"),
-        os.path.expanduser("~/miniconda3/envs/mf2/bin/mafft"),
-        os.path.expanduser("~/miniconda3/envs/skills_hackathon/bin/mafft"),
+        os.path.join(conda_prefix, "bin/mafft") if conda_prefix else "",
+        os.path.expanduser("~/miniconda3/envs/spt/bin/mafft"),
+        os.path.expanduser("~/miniconda3/bin/mafft"),
         "/opt/homebrew/bin/mafft",
         "/usr/local/bin/mafft",
     ]
     for c in candidates:
-        if os.path.isfile(c) and os.access(c, os.X_OK):
+        if c and os.path.isfile(c) and os.access(c, os.X_OK):
             return c
     return "mafft"
 
