@@ -1,6 +1,6 @@
 # 🧬 Viral Structural Phylogenetics & Cophylogenetic Tanglegram Suite
 
-[![CI](https://github.com/steineggerlab/viral-structural-phylogenetics/actions/workflows/ci.yml/badge.svg)](https://github.com/steineggerlab/viral-structural-phylogenetics/actions/workflows/ci.yml)
+[![CI](https://github.com/kieran12lamb/structural_phylogenetics_tool/actions/workflows/ci.yml/badge.svg)](https://github.com/kieran12lamb/structural_phylogenetics_tool/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Conda](https://img.shields.io/badge/conda-bioconda%20%7C%20conda--forge-green.svg)](https://anaconda.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -34,8 +34,8 @@ By computing evolutionary relationships on **tertiary 3D protein structure coord
 Clone the repository and run the automated installation script:
 
 ```bash
-git clone https://github.com/your-org/viral-structural-phylogenetics.git
-cd viral-structural-phylogenetics
+git clone https://github.com/kieran12lamb/structural_phylogenetics_tool.git
+cd structural_phylogenetics_tool
 
 # Automated environment setup and test validation:
 ./install.sh
