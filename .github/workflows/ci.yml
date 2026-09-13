@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }}, Python 3.11)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, macos-latest ]
+
+    defaults:
+      run:
+        shell: bash -l {0}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Conda Environment
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          python-version: "3.11"
+          channels: bioconda,conda-forge,defaults
+          environment-file: environment.yml
+          activate-environment: spt
+
+      - name: Verify Environment Binaries
+        run: |
+          echo "Python version:"
+          python --version
+          echo "FoldMason version:"
+          foldmason version || echo "FoldMason available"
+          echo "IQ-TREE version:"
+          iqtree --version || echo "IQ-TREE available"
+          echo "MAFFT version:"
+          mafft --version || echo "MAFFT available"
+
+      - name: Run Linting (Flake8)
+        run: |
+          # Stop the build if there are Python syntax errors or undefined names
+          flake8 scripts/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          # Exit-zero treats all errors as warnings
+          flake8 scripts/ tests/ --count --exit-zero --max-complexity=15 --max-line-length=130 --statistics
+
+      - name: Run Unit Tests
+        run: |
+          python -m unittest discover -s tests -p "test_*.py" -v

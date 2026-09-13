@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "viral-structural-phylogenetics"
+version = "1.0.0"
+description = "Viral Structural Phylogenetics, PLM Embeddings, and Interactive Cophylogenetic Tanglegrams"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Kieran Lamb"}
+]
+keywords = [
+    "structural-phylogenetics",
+    "viral-evolution",
+    "3di",
+    "foldmason",
+    "iqtree",
+    "esm2",
+    "tanglegram",
+    "virology"
+]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+    "pandas>=2.0.0",
+    "requests>=2.28.0",
+    "tqdm>=4.65.0",
+    "rich>=13.0.0"
+]
+
+[project.optional-dependencies]
+ml = [
+    "torch>=2.0.0",
+    "transformers>=4.30.0",
+    "scikit-learn>=1.2.0",
+    "biopython>=1.80"
+]
+dev = [
+    "pytest>=7.4.0",
+    "flake8>=6.0.0"
+]
+
+[project.scripts]
+viral-phylo = "scripts.viral_phylogenetics:main"
+embed-cluster = "scripts.embed_and_cluster:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.flake8]
+max-line-length = 130
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    "results",
+    "scripts/legacy"
+]

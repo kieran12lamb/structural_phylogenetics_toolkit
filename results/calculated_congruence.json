@@ -1,0 +1,155 @@
+{
+  "6": {
+    "3di_vs_aa": {
+      "shared_splits": 0,
+      "rf_distance": 6,
+      "max_rf": 6,
+      "congruence_pct": 0.0,
+      "cophenetic_r": 0.4588
+    },
+    "3di_vs_esm2_cosine": {
+      "shared_splits": 0,
+      "rf_distance": 6,
+      "max_rf": 6,
+      "congruence_pct": 0.0,
+      "cophenetic_r": -0.3244
+    },
+    "3di_vs_esm2_euclidean": {
+      "shared_splits": 0,
+      "rf_distance": 6,
+      "max_rf": 6,
+      "congruence_pct": 0.0,
+      "cophenetic_r": -0.2305
+    },
+    "3di_vs_esm2_l1": {
+      "shared_splits": 0,
+      "rf_distance": 6,
+      "max_rf": 6,
+      "congruence_pct": 0.0,
+      "cophenetic_r": -0.2296
+    },
+    "aa_vs_esm2_cosine": {
+      "shared_splits": 1,
+      "rf_distance": 4,
+      "max_rf": 6,
+      "congruence_pct": 33.33,
+      "cophenetic_r": -0.1115
+    },
+    "aa_vs_esm2_euclidean": {
+      "shared_splits": 1,
+      "rf_distance": 4,
+      "max_rf": 6,
+      "congruence_pct": 33.33,
+      "cophenetic_r": 0.0186
+    },
+    "aa_vs_esm2_l1": {
+      "shared_splits": 1,
+      "rf_distance": 4,
+      "max_rf": 6,
+      "congruence_pct": 33.33,
+      "cophenetic_r": 0.0254
+    }
+  },
+  "500": {
+    "3di_vs_aa": {
+      "shared_splits": 182,
+      "rf_distance": 630,
+      "max_rf": 994,
+      "congruence_pct": 36.62,
+      "cophenetic_r": 0.5955
+    },
+    "3di_vs_esm2_cosine": {
+      "shared_splits": 97,
+      "rf_distance": 801,
+      "max_rf": 995,
+      "congruence_pct": 19.5,
+      "cophenetic_r": 0.3187
+    },
+    "3di_vs_esm2_euclidean": {
+      "shared_splits": 101,
+      "rf_distance": 793,
+      "max_rf": 995,
+      "congruence_pct": 20.3,
+      "cophenetic_r": 0.3435
+    },
+    "3di_vs_esm2_l1": {
+      "shared_splits": 96,
+      "rf_distance": 803,
+      "max_rf": 995,
+      "congruence_pct": 19.3,
+      "cophenetic_r": 0.2765
+    },
+    "aa_vs_esm2_cosine": {
+      "shared_splits": 118,
+      "rf_distance": 759,
+      "max_rf": 995,
+      "congruence_pct": 23.72,
+      "cophenetic_r": 0.4201
+    },
+    "aa_vs_esm2_euclidean": {
+      "shared_splits": 120,
+      "rf_distance": 755,
+      "max_rf": 995,
+      "congruence_pct": 24.12,
+      "cophenetic_r": 0.4442
+    },
+    "aa_vs_esm2_l1": {
+      "shared_splits": 121,
+      "rf_distance": 753,
+      "max_rf": 995,
+      "congruence_pct": 24.32,
+      "cophenetic_r": 0.4656
+    }
+  },
+  "1193": {
+    "3di_vs_aa": {
+      "shared_splits": 178,
+      "rf_distance": 2024,
+      "max_rf": 2380,
+      "congruence_pct": 14.96,
+      "cophenetic_r": 0.3171
+    },
+    "3di_vs_esm2_cosine": {
+      "shared_splits": 136,
+      "rf_distance": 2108,
+      "max_rf": 2380,
+      "congruence_pct": 11.43,
+      "cophenetic_r": 0.5434
+    },
+    "3di_vs_esm2_euclidean": {
+      "shared_splits": 134,
+      "rf_distance": 2112,
+      "max_rf": 2380,
+      "congruence_pct": 11.26,
+      "cophenetic_r": 0.4597
+    },
+    "3di_vs_esm2_l1": {
+      "shared_splits": 137,
+      "rf_distance": 2106,
+      "max_rf": 2380,
+      "congruence_pct": 11.51,
+      "cophenetic_r": 0.4566
+    },
+    "aa_vs_esm2_cosine": {
+      "shared_splits": 178,
+      "rf_distance": 2024,
+      "max_rf": 2380,
+      "congruence_pct": 14.96,
+      "cophenetic_r": 0.5338
+    },
+    "aa_vs_esm2_euclidean": {
+      "shared_splits": 178,
+      "rf_distance": 2024,
+      "max_rf": 2380,
+      "congruence_pct": 14.96,
+      "cophenetic_r": 0.3955
+    },
+    "aa_vs_esm2_l1": {
+      "shared_splits": 184,
+      "rf_distance": 2012,
+      "max_rf": 2380,
+      "congruence_pct": 15.46,
+      "cophenetic_r": 0.3761
+    }
+  }
+}

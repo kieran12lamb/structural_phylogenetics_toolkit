@@ -1,0 +1,25 @@
+name: spt
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - foldmason>=4.dd3c235
+  - iqtree>=2.3.0
+  - mafft>=7.500
+  - biopython>=1.80
+  - numpy>=1.24
+  - scipy>=1.10
+  - scikit-learn>=1.2
+  - pandas>=2.0
+  - requests>=2.28
+  - tqdm>=4.65
+  - rich>=13.0
+  - click>=8.0
+  - pytest>=7.4.0
+  - flake8>=6.0.0
+  - pip
+  - pip:
+      - torch>=2.0.0
+      - transformers>=4.30.0
