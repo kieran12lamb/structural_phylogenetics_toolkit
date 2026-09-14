@@ -65,22 +65,58 @@ The unified command-line tool `scripts/viral_phylogenetics.py` provides modular 
 
 ### 1. Run the Full End-to-End Pipeline
 
+The pipeline can be executed in either **Fast Mode** (for rapid exploratory screening) or **Thorough / Slow Mode** (for publication-grade rigorous phylogenetics):
+
+#### ⚡ Fast Analysis Mode (Rapid Screening & Prototyping)
+> Uses `--fast` heuristic ML tree search, skips exhaustive model testing by applying verified empirical models (`+G4`), and omits bootstrapping to complete in seconds to a couple minutes.
+
 ```bash
-# From a local directory of PDB structures (e.g. the 6 benchmark example structures):
+# Fast analysis from a local directory of PDB structures:
 python3 scripts/viral_phylogenetics.py pipeline \
   --input-folder results/glycoprotein_workflow/structures \
   --tree-type both \
   --matrix alphafold \
+  --fast \
   --embed \
-  --output-dir results/my_workflow
+  --output-dir results/fast_workflow
 
-# Or query directly from Viro3D:
+# Fast analysis querying Viro3D directly (e.g. 50 glycoproteins):
+python3 scripts/viral_phylogenetics.py pipeline \
+  --qualifier glycoprotein \
+  --count 50 \
+  --tree-type both \
+  --matrix auto \
+  --fast \
+  --embed \
+  --output-dir results/fast_glycoprotein_workflow
+```
+
+#### 🔬 Thorough / Slow Analysis Mode (Publication-Grade Deep Inference)
+> Runs exhaustive ModelFinder rate heterogeneity testing across empirical matrices, infers Maximum Likelihood trees with extensive branch swapping, computes 1,000 Ultrafast Bootstrap replicates (`-b 1000`) and 1,000 SH-aLRT support tests (`--alrt 1000`), evaluates both 3Di matrices (`--matrix both`), and extracts ESM-2 PLM representations (`--embed`).
+
+```bash
+# Thorough analysis from a local directory of PDB structures:
+python3 scripts/viral_phylogenetics.py pipeline \
+  --input-folder results/glycoprotein_workflow/structures \
+  --tree-type both \
+  --matrix both \
+  --rate-heterogeneity auto \
+  --bootstrap 1000 \
+  --alrt 1000 \
+  --embed \
+  --output-dir results/thorough_workflow
+
+# Thorough analysis querying Viro3D directly (e.g. 100 glycoproteins):
 python3 scripts/viral_phylogenetics.py pipeline \
   --qualifier glycoprotein \
   --count 100 \
   --tree-type both \
   --matrix auto \
-  --output-dir results/glycoprotein_100_workflow
+  --rate-heterogeneity auto \
+  --bootstrap 1000 \
+  --alrt 1000 \
+  --embed \
+  --output-dir results/thorough_glycoprotein_workflow
 ```
 
 ### 2. Step-by-Step Execution

@@ -42,6 +42,15 @@ print("Parsing 500 Viral Glycoprotein alignments...")
 g500_aa = parse_fasta(results_dir / "foldmason_500_alignments/foldmason.fasta_aa.fa")
 g500_3di = parse_fasta(results_dir / "foldmason_500_alignments/foldmason.fasta_3di.fa")
 
+rdrp_100_aa_path = results_dir / "rdrp_100_workflow/alignment/foldmason.fasta_aa.fa"
+rdrp_100_3di_path = results_dir / "rdrp_100_workflow/alignment/foldmason.fasta_3di.fa"
+rdrp_aa = {}
+rdrp_3di = {}
+if rdrp_100_aa_path.exists() and rdrp_100_3di_path.exists():
+    print("Parsing 100 RdRp alignments...")
+    rdrp_aa = parse_fasta(rdrp_100_aa_path)
+    rdrp_3di = parse_fasta(rdrp_100_3di_path)
+
 alignments = {
     "1193": {
         "length": len(next(iter(nipah_aa.values()))),
@@ -63,12 +72,22 @@ alignments = {
     }
 }
 
+if rdrp_aa and rdrp_3di:
+    alignments["100"] = {
+        "length": len(next(iter(rdrp_aa.values()))),
+        "taxa_count": len(rdrp_aa),
+        "aa": rdrp_aa,
+        "3di": rdrp_3di
+    }
+
 js_content = "window.ALIGNMENTS_DATA = " + json.dumps(alignments) + ";\n"
 
 targets = [
+    repo_dir / "alignments_data.js",
     results_dir / "alignments_data.js",
     results_dir / "nipah_esm_workflow/alignments_data.js",
     results_dir / "glycoprotein_workflow/phylogeny/alignments_data.js",
+    results_dir / "rdrp_100_workflow/alignments_data.js",
 ]
 extra_dir = os.environ.get("ANTIGRAVITY_ARTIFACT_DIR")
 if extra_dir and Path(extra_dir).exists():

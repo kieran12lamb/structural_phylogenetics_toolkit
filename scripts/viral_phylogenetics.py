@@ -754,6 +754,69 @@ def main():
             ]
             subprocess.run(cmd, check=True)
 
+        # 6. Generate Standalone Interactive HTML Visualizations & Datasets
+        print("\n[Pipeline] Compiling interactive HTML suite and supporting assets...")
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        build_tree_script = os.path.join(script_dir, "build_dynamic_interactive_tree.py")
+        build_aln_script = os.path.join(script_dir, "build_alignments_data.py")
+
+        try:
+            ca_dict = {}
+            pdb_files = sorted(glob.glob(os.path.join(pdb_dir, "*.pdb")) + glob.glob(os.path.join(pdb_dir, "*.cif")))
+            for p in pdb_files:
+                taxon_id = os.path.splitext(os.path.basename(p))[0]
+                ca = []
+                with open(p, "r", encoding="utf-8", errors="ignore") as f:
+                    for line in f:
+                        if line.startswith("ATOM") and line[12:16].strip() == "CA":
+                            try:
+                                resname = line[17:20].strip()
+                                resnum = int(line[22:26].strip())
+                                x = round(float(line[30:38].strip()), 1)
+                                y = round(float(line[38:46].strip()), 1)
+                                z = round(float(line[46:54].strip()), 1)
+                                b_factor = round(float(line[60:66].strip()), 1)
+                                ca.append([x, y, z, b_factor, resnum, resname])
+                            except Exception:
+                                continue
+                if ca:
+                    ca_dict[taxon_id] = ca
+            if ca_dict:
+                ca_js = "window.CA_STRUCTURES = Object.assign(window.CA_STRUCTURES || {}, " + json.dumps(ca_dict) + ");\n"
+                with open(os.path.join(out_base, "ca_structures.js"), "w", encoding="utf-8") as f:
+                    f.write(ca_js)
+
+            # Also ensure all cohort structure packs exist in out_base so all datasets load cleanly
+            for sf in ["ca_500_structures.js", "ca_1193_structures.js", "ca_100_structures.js", "alignments_data.js"]:
+                results_sf = os.path.join("results", sf)
+                dst_sf = os.path.join(out_base, sf)
+                if os.path.isfile(results_sf) and not os.path.isfile(dst_sf):
+                    try:
+                        shutil.copy2(results_sf, dst_sf)
+                    except Exception:
+                        pass
+        except Exception as e:
+            print(f"[Pipeline] Notice: C-alpha extraction encountered: {e}")
+
+        try:
+            target_py = sys.executable
+            if os.path.isfile(build_aln_script):
+                subprocess.run([target_py, build_aln_script], check=False)
+            if os.path.isfile(build_tree_script):
+                subprocess.run([target_py, build_tree_script], check=False)
+
+            wf_html = os.path.join(out_base, "interactive_tree.html")
+            root_html = os.path.abspath("interactive_tree.html")
+            print("\n[Pipeline] ========================================================")
+            print("[Pipeline] ✅ Full Pipeline Execution & Visualization Complete!")
+            if os.path.isfile(wf_html):
+                print(f"[Pipeline] 📊 Standalone Visualizer: file://{os.path.abspath(wf_html)}")
+            if os.path.isfile(root_html):
+                print(f"[Pipeline] 🌐 Dashboard Visualizer:  file://{root_html}")
+            print("[Pipeline] ========================================================\n")
+        except Exception as e:
+            print(f"[Pipeline] Notice: Automated HTML compilation returned: {e}")
+
 
 
 

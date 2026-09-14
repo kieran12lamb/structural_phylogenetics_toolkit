@@ -1,0 +1,154 @@
+IQ-TREE version 3.1.3 for MacOS ARM 64-bit built Jul 26 2026
+Developed by Bui Quang Minh, Thomas Wong, Nhan Ly-Trong, Huaiyan Ren
+Contributed by Lam-Tung Nguyen, Dominik Schrempf, Chris Bielow,
+Olga Chernomor, Michael Woodhams, Diep Thi Hoang, Heiko Schmidt
+
+Host:    MVLS-MACLAP37F423 (SSE4.2, 24 GB RAM)
+Command: iqtree -s glycoprotein_workflow/alignment/foldmason.fasta_aa.fa -m MFP -B 1000 -alrt 1000 -pre glycoprotein_workflow/phylogeny/aa_tree -nt 2 -redo
+Seed:    908175 (Using SPRNG - Scalable Parallel Random Number Generator)
+Time:    Sat Sep 12 14:50:28 2026
+Kernel:  SSE2 - 2 threads (10 CPU cores detected)
+
+Reading alignment file glycoprotein_workflow/alignment/foldmason.fasta_aa.fa ... Fasta format detected
+Reading fasta file: done in 8.2016e-05 secs using 49.99% CPU
+Alignment most likely contains protein sequences
+Constructing alignment: done in 0.000283003 secs using 58.3% CPU
+Alignment has 6 sequences with 562 columns, 547 distinct patterns
+20 parsimony-informative, 508 singleton sites, 34 constant sites
+                   Gap/Ambiguity  Composition  p-value
+Analyzing sequences: done in 2.28882e-05 secs using 39.32% CPU
+   1  AAA16239.1.2_9396   13.52%    passed     10.09%
+   2  AAA88529.1.3_6592   14.41%    failed      0.00%
+   3  AAB93840.1.1_9564   46.44%    passed     11.74%
+   4  AAQ55251.1.2_9251   57.65%    failed      1.91%
+   5  AAA88529.1.2_6592   49.82%    failed      0.00%
+   6  AAQ55251.1.1_9251   56.05%    passed      8.82%
+WARNING: 2 sequences contain more than 50% gaps/ambiguity
+****  TOTAL               39.65%  3 sequences failed composition chi2 test (p-value<5%; df=19)
+Checking for duplicate sequences: done in 1.40667e-05 secs using 78.2% CPU
+
+
+Create initial parsimony tree by phylogenetic likelihood library (PLL)... 0.000 seconds
+Perform fast likelihood tree search using LG+I+G model...
+Estimate model parameters (epsilon = 5.000)
+Perform nearest neighbor interchange...
+Estimate model parameters (epsilon = 1.000)
+1. Initial log-likelihood: -6072.818
+Optimal log-likelihood: -6072.237
+Proportion of invariable sites: 0.000
+Gamma shape alpha: 1.187
+Parameters optimization took 1 rounds (0.005 sec)
+Time for fast ML tree search: 0.049 seconds
+
+NOTE: ModelFinder requires 7 MB RAM!
+ModelFinder will test up to 1232 protein models (sample size: 562 epsilon: 0.100) ...
+ No. Model         -LnL         df  AIC          AICc         BIC
+Akaike Information Criterion:           RTREV+F+G4
+Corrected Akaike Information Criterion: RTREV+F+G4
+Bayesian Information Criterion:         PMB
+Best-fit model: PMB chosen according to BIC
+
+All model information printed to glycoprotein_workflow/phylogeny/aa_tree.model.gz
+CPU time for ModelFinder: 5.195 seconds (0h:0m:5s)
+Wall-clock time for ModelFinder: 3.779 seconds (0h:0m:3s)
+Generating 1000 samples for ultrafast bootstrap (seed: 908175)...
+
+NOTE: 2 MB RAM (0 GB) is required!
+Estimate model parameters (epsilon = 0.100)
+1. Initial log-likelihood: -6007.083
+Optimal log-likelihood: -5984.272
+Parameters optimization took 1 rounds (0.007 sec)
+Wrote distance file to... 
+Computing ML distances based on estimated model parameters...
+Calculating distance matrix: done in 0.000770092 secs using 183.5% CPU
+Computing ML distances took 0.000812 sec (of wall-clock time) 0.001436 sec (of CPU time)
+WARNING: Some pairwise ML distances are too long (saturated)
+Setting up auxiliary I and S matrices: done in 2.00272e-05 secs using 64.91% CPU
+Constructing RapidNJ tree: done in 7.79629e-05 secs using 39.76% CPU
+Computing RapidNJ tree took 0.000123 sec (of wall-clock time) 0.000052 sec (of CPU time)
+Log-likelihood of RapidNJ tree: -5984.101
+--------------------------------------------------------------------
+|             INITIALIZING CANDIDATE TREE SET                      |
+--------------------------------------------------------------------
+Generating 98 parsimony trees... 0.009 second
+Computing log-likelihood of 17 initial trees ... 0.018 seconds
+Current best score: -5984.101
+
+Do NNI search on 19 best initial trees
+WARNING: NNI search needs unusual large number of steps (6) to converge!
+WARNING: NNI search needs unusual large number of steps (6) to converge!
+Iteration 10 / LogL: -5984.263 / Time: 0h:0m:4s
+WARNING: NNI search needs unusual large number of steps (6) to converge!
+Estimate model parameters (epsilon = 0.100)
+UPDATE BEST LOG-LIKELIHOOD: -5983.968
+Finish initializing candidate tree set (19)
+Current best tree score: -5983.968 / CPU time: 0.325
+Number of iterations: 19
+--------------------------------------------------------------------
+|               OPTIMIZING CANDIDATE TREE SET                      |
+--------------------------------------------------------------------
+Iteration 20 / LogL: -5984.013 / Time: 0h:0m:4s
+Estimate model parameters (epsilon = 0.100)
+UPDATE BEST LOG-LIKELIHOOD: -5983.900
+Iteration 30 / LogL: -5984.018 / Time: 0h:0m:4s (0h:0m:1s left)
+Estimate model parameters (epsilon = 0.100)
+UPDATE BEST LOG-LIKELIHOOD: -5983.804
+UPDATE BEST LOG-LIKELIHOOD: -5983.797
+Iteration 40 / LogL: -5983.916 / Time: 0h:0m:4s (0h:0m:0s left)
+UPDATE BEST LOG-LIKELIHOOD: -5983.792
+UPDATE BEST LOG-LIKELIHOOD: -5983.789
+Iteration 50 / LogL: -5984.043 / Time: 0h:0m:4s (0h:0m:0s left)
+Log-likelihood cutoff on original alignment: -5996.474
+UPDATE BEST LOG-LIKELIHOOD: -5983.788
+Iteration 60 / LogL: -5984.182 / Time: 0h:0m:4s (0h:0m:0s left)
+UPDATE BEST LOG-LIKELIHOOD: -5983.786
+UPDATE BEST LOG-LIKELIHOOD: -5983.786
+Iteration 70 / LogL: -5984.065 / Time: 0h:0m:4s (0h:0m:0s left)
+Iteration 80 / LogL: -5984.122 / Time: 0h:0m:4s (0h:0m:0s left)
+UPDATE BEST LOG-LIKELIHOOD: -5983.784
+Iteration 90 / LogL: -5984.096 / Time: 0h:0m:4s (0h:0m:0s left)
+Iteration 100 / LogL: -5983.916 / Time: 0h:0m:4s (0h:0m:0s left)
+Log-likelihood cutoff on original alignment: -5996.474
+NOTE: Bootstrap correlation coefficient of split occurrence frequencies: 0.999
+TREE SEARCH COMPLETED AFTER 101 ITERATIONS / Time: 0h:0m:4s
+
+--------------------------------------------------------------------
+|                    FINALIZING TREE SEARCH                        |
+--------------------------------------------------------------------
+Performs final model parameters optimization
+Estimate model parameters (epsilon = 0.010)
+1. Initial log-likelihood: -5983.784
+Optimal log-likelihood: -5983.783
+Parameters optimization took 1 rounds (0.001 sec)
+BEST SCORE FOUND : -5983.783
+
+Testing tree branches by SH-like aLRT with 1000 replicates...
+0.008 sec.
+Creating bootstrap support values...
+Split supports printed to NEXUS file glycoprotein_workflow/phylogeny/aa_tree.splits.nex
+Total tree length: 16.849
+
+Total number of iterations: 101
+CPU time used for tree search: 1.164 sec (0h:0m:1s)
+Wall-clock time used for tree search: 1.103 sec (0h:0m:1s)
+Total CPU time used: 6.412 sec (0h:0m:6s)
+Total wall-clock time used: 4.937 sec (0h:0m:4s)
+
+Computing bootstrap consensus tree...
+Reading input file glycoprotein_workflow/phylogeny/aa_tree.splits.nex...
+6 taxa and 30 splits.
+Consensus tree written to glycoprotein_workflow/phylogeny/aa_tree.contree
+Reading input trees file glycoprotein_workflow/phylogeny/aa_tree.contree
+Log-likelihood of consensus tree: -5983.792
+
+Analysis results written to: 
+  IQ-TREE report:                glycoprotein_workflow/phylogeny/aa_tree.iqtree
+  Maximum-likelihood tree:       glycoprotein_workflow/phylogeny/aa_tree.treefile
+  Likelihood distances:          glycoprotein_workflow/phylogeny/aa_tree.mldist
+
+Ultrafast bootstrap approximation results written to:
+  Split support values:          glycoprotein_workflow/phylogeny/aa_tree.splits.nex
+  Consensus tree:                glycoprotein_workflow/phylogeny/aa_tree.contree
+  Screen log file:               glycoprotein_workflow/phylogeny/aa_tree.log
+
+Date and Time: Sat Sep 12 14:50:33 2026

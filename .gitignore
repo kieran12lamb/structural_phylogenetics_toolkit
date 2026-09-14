@@ -56,3 +56,9 @@ reproduced_results/
 *.pdb
 *.cif
 !results/glycoprotein_workflow/structures/*.pdb
+
+# Results folders: only the 6 benchmark demo folder (glycoprotein_workflow) is tracked
+results/*/
+!results/glycoprotein_workflow/
+!results/glycoprotein_workflow/**
+

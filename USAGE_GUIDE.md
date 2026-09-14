@@ -133,6 +133,32 @@ python scripts/viral_phylogenetics.py pipeline [options]
 | `--embed-metric` | choice | `cosine` | Pairwise distance metric: `cosine` or `euclidean`. |
 | `-o`, `--output-dir` | path | `glycoprotein_workflow` | Output folder where structures, alignments, and trees are stored. |
 
+#### Fast vs. Thorough Pipeline Profiles:
+
+- **⚡ Fast Mode (Rapid Screening & Prototyping)**:
+  ```bash
+  python scripts/viral_phylogenetics.py pipeline \
+    --input-folder results/glycoprotein_workflow/structures \
+    --tree-type both \
+    --matrix alphafold \
+    --fast \
+    --embed \
+    --output-dir results/fast_workflow
+  ```
+
+- **🔬 Thorough Mode (Publication-Grade Deep Phylogenetics)**:
+  ```bash
+  python scripts/viral_phylogenetics.py pipeline \
+    --input-folder results/glycoprotein_workflow/structures \
+    --tree-type both \
+    --matrix both \
+    --rate-heterogeneity auto \
+    --bootstrap 1000 \
+    --alrt 1000 \
+    --embed \
+    --output-dir results/thorough_workflow
+  ```
+
 ---
 
 ### Subcommand: `fetch`

@@ -151,5 +151,14 @@
       "congruence_pct": 15.46,
       "cophenetic_r": 0.3761
     }
+  },
+  "100": {
+    "3di_vs_aa": {
+      "shared_splits": 11,
+      "rf_distance": 172,
+      "max_rf": 194,
+      "congruence_pct": 11.34,
+      "cophenetic_r": 0.8482
+    }
   }
 }
