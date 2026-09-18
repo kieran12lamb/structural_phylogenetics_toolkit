@@ -74,5 +74,51 @@ class TestAlignment(unittest.TestCase):
         self.assertGreater(llm_matrix.stat().st_size, 100)
 
 
+    def test_compute_alignment_coverage(self):
+        """Verify alignment coverage calculation across sequences and columns."""
+        from scripts.viral_phylogenetics import compute_alignment_coverage
+
+        test_aln = {
+            "Seq1": "AAAA----",  # 4 non-gaps / 8 = 0.50
+            "Seq2": "AAAAAA--",  # 6 non-gaps / 8 = 0.75
+            "Seq3": "AAAAAAAA"   # 8 non-gaps / 8 = 1.00
+        }
+        res = compute_alignment_coverage(test_aln)
+        self.assertEqual(res["aln_length"], 8)
+        self.assertEqual(res["taxa"]["Seq1"]["sequence_coverage"], 0.50)
+        self.assertEqual(res["taxa"]["Seq2"]["sequence_coverage"], 0.75)
+        self.assertEqual(res["taxa"]["Seq3"]["sequence_coverage"], 1.00)
+
+        # Check column occupancies
+        self.assertEqual(res["column_occupancy"][0], 1.0)
+        self.assertEqual(res["column_occupancy"][4], round(2/3, 4))
+        self.assertEqual(res["column_occupancy"][6], round(1/3, 4))
+
+    def test_filter_alignment_by_coverage(self):
+        """Verify filtering sequences below the coverage threshold."""
+        from scripts.viral_phylogenetics import filter_alignment_by_coverage, write_alignment_fasta
+        import tempfile
+
+        test_aln = {
+            "Core1": "AAAAAAAA",  # 1.00
+            "Core2": "AAAAAA--",  # 0.75
+            "Frag1": "AA------",  # 0.25
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            f_3di = Path(tmpdir) / "test_3di.fa"
+            write_alignment_fasta(test_aln, str(f_3di))
+
+            # Filter at 70% threshold
+            f_res = filter_alignment_by_coverage(str(f_3di), min_coverage=0.70, output_dir=tmpdir)
+            self.assertIn("Core1", f_res["passed_taxa"])
+            self.assertIn("Core2", f_res["passed_taxa"])
+            self.assertIn("Frag1", f_res["removed_taxa"])
+            self.assertEqual(len(f_res["passed_taxa"]), 2)
+            self.assertEqual(len(f_res["removed_taxa"]), 1)
+
+            # Check that output file exists and has stripped gap columns
+            self.assertTrue(Path(f_res["out_3di"]).exists())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -13,7 +13,7 @@ By computing evolutionary relationships on **tertiary 3D protein structure coord
 
 ## 🌟 Key Capabilities
 
-1. **Automated Structure Fetching (`fetch`)**: Query and download predicted 3D structures from [Viro3D](https://viro3d.org) (AlphaFold2, ColabFold, and ESMFold models).
+1. **Automated Structure Fetching (`fetch`)**: Query and download predicted 3D structures from the **AlphaFold Protein Structure Database (AFDB)** via UniProt IDs or search terms, or from [Viro3D](https://viro3d.org) (AlphaFold2, ColabFold, and ESMFold models).
 2. **Structural Multiple Sequence Alignment (`align`)**: Fast 3D backbone superposition with **FoldMason** or **MAFFT** using custom 3Di substitution matrices (`mat3di.out`).
 3. **Maximum Likelihood Structural Phylogenetics (`tree`)**: Rigorous tree inference via **IQ-TREE** with empirical AlphaFold (`Q.3Di.AF`) and ESMFold (`Q.3Di.LLM`) substitution matrices, automated rate heterogeneity model selection (`+G4`, `+I`, `+R`), and ultrafast bootstrap support.
 4. **PLM Embedding Trees & Clustering (`embed`)**: Extract sequence representations from **ESM-2 (650M)** or **ESM-C (600M)**, compute semantic distance matrices (Cosine, Euclidean, L1/Manhattan), and build UPGMA hierarchical trees with silhouette profile analysis.

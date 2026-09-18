@@ -1,0 +1,720 @@
+    /* 1. MIDNIGHT SLATE (Default Dark) */
+    :root, [data-theme="dark"] {
+      --bg-main: #0b1120;
+      --panel-bg: rgba(15, 23, 42, 0.92);
+      --card-bg: rgba(30, 41, 59, 0.95);
+      --chip-bg: rgba(51, 65, 85, 0.45);
+      --border-color: #334155;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --branch-stroke: #64748b;
+      --node-stroke: rgba(255, 255, 255, 0.45);
+      --tip-label: #cbd5e1;
+      --tooltip-bg: rgba(15, 23, 42, 0.98);
+      --accent: #38bdf8;
+      --highlight: #facc15;
+      --input-bg: #1e293b;
+      --grid-line: rgba(51, 65, 85, 0.25);
+      --badge-sky-text: #38bdf8;
+      --badge-sky-bg: rgba(56, 189, 248, 0.15);
+      --badge-sky-border: rgba(56, 189, 248, 0.35);
+      --badge-emerald-text: #34d399;
+      --badge-emerald-bg: rgba(16, 185, 129, 0.15);
+      --badge-emerald-border: rgba(16, 185, 129, 0.35);
+      --badge-rose-text: #fb7185;
+      --badge-rose-bg: rgba(244, 63, 94, 0.15);
+      --badge-rose-border: rgba(244, 63, 94, 0.35);
+      --badge-amber-text: #fbbf24;
+      --badge-amber-bg: rgba(245, 158, 11, 0.15);
+      --badge-amber-border: rgba(245, 158, 11, 0.35);
+      --badge-purple-text: #c084fc;
+      --badge-purple-bg: rgba(168, 85, 247, 0.15);
+      --badge-purple-border: rgba(168, 85, 247, 0.35);
+    }
+
+    /* 2. OBSIDIAN CHARCOAL (OLED Pitch Dark) */
+    [data-theme="obsidian"] {
+      --bg-main: #030712;
+      --panel-bg: rgba(10, 15, 26, 0.96);
+      --card-bg: rgba(17, 24, 39, 0.96);
+      --chip-bg: rgba(31, 41, 55, 0.55);
+      --border-color: #1f2937;
+      --text-main: #f9fafb;
+      --text-muted: #9ca3af;
+      --branch-stroke: #6b7280;
+      --node-stroke: rgba(255, 255, 255, 0.55);
+      --tip-label: #e5e7eb;
+      --tooltip-bg: rgba(3, 7, 18, 0.98);
+      --accent: #2dd4bf;
+      --highlight: #fbbf24;
+      --input-bg: #111827;
+      --grid-line: rgba(31, 41, 55, 0.25);
+      --badge-sky-text: #2dd4bf;
+      --badge-sky-bg: rgba(45, 212, 191, 0.15);
+      --badge-sky-border: rgba(45, 212, 191, 0.35);
+      --badge-emerald-text: #34d399;
+      --badge-emerald-bg: rgba(16, 185, 129, 0.15);
+      --badge-emerald-border: rgba(16, 185, 129, 0.35);
+      --badge-rose-text: #fb7185;
+      --badge-rose-bg: rgba(244, 63, 94, 0.15);
+      --badge-rose-border: rgba(244, 63, 94, 0.35);
+      --badge-amber-text: #fbbf24;
+      --badge-amber-bg: rgba(245, 158, 11, 0.15);
+      --badge-amber-border: rgba(245, 158, 11, 0.35);
+      --badge-purple-text: #c084fc;
+      --badge-purple-bg: rgba(168, 85, 247, 0.15);
+      --badge-purple-border: rgba(168, 85, 247, 0.35);
+    }
+
+    /* 3. DEEP FOREST (Emerald Dark) */
+    [data-theme="forest"] {
+      --bg-main: #041f16;
+      --panel-bg: rgba(6, 40, 29, 0.94);
+      --card-bg: rgba(8, 51, 37, 0.96);
+      --chip-bg: rgba(16, 75, 55, 0.5);
+      --border-color: #134e3a;
+      --text-main: #ecfdf5;
+      --text-muted: #6ee7b7;
+      --branch-stroke: #059669;
+      --node-stroke: rgba(255, 255, 255, 0.5);
+      --tip-label: #d1fae5;
+      --tooltip-bg: rgba(4, 31, 22, 0.98);
+      --accent: #34d399;
+      --highlight: #f59e0b;
+      --input-bg: #064e3b;
+      --grid-line: rgba(19, 78, 58, 0.3);
+      --badge-sky-text: #6ee7b7;
+      --badge-sky-bg: rgba(110, 231, 183, 0.15);
+      --badge-sky-border: rgba(110, 231, 183, 0.35);
+      --badge-emerald-text: #34d399;
+      --badge-emerald-bg: rgba(52, 211, 153, 0.18);
+      --badge-emerald-border: rgba(52, 211, 153, 0.35);
+      --badge-rose-text: #fb7185;
+      --badge-rose-bg: rgba(244, 63, 94, 0.15);
+      --badge-rose-border: rgba(244, 63, 94, 0.35);
+      --badge-amber-text: #fbbf24;
+      --badge-amber-bg: rgba(245, 158, 11, 0.15);
+      --badge-amber-border: rgba(245, 158, 11, 0.35);
+      --badge-purple-text: #6ee7b7;
+      --badge-purple-bg: rgba(110, 231, 183, 0.15);
+      --badge-purple-border: rgba(110, 231, 183, 0.35);
+    }
+
+    /* 4. DRACULA GOTHIC (Deep Purple Dark) */
+    [data-theme="dracula"] {
+      --bg-main: #282a36;
+      --panel-bg: rgba(40, 42, 54, 0.95);
+      --card-bg: rgba(68, 71, 90, 0.95);
+      --chip-bg: rgba(68, 71, 90, 0.55);
+      --border-color: #6272a4;
+      --text-main: #f8f8f2;
+      --text-muted: #bd93f9;
+      --branch-stroke: #bd93f9;
+      --node-stroke: rgba(255, 255, 255, 0.5);
+      --tip-label: #f8f8f2;
+      --tooltip-bg: rgba(40, 42, 54, 0.98);
+      --accent: #ff79c6;
+      --highlight: #f1fa8c;
+      --input-bg: #21222c;
+      --grid-line: rgba(98, 114, 164, 0.25);
+      --badge-sky-text: #8be9fd;
+      --badge-sky-bg: rgba(139, 233, 253, 0.15);
+      --badge-sky-border: rgba(139, 233, 253, 0.35);
+      --badge-emerald-text: #50fa7b;
+      --badge-emerald-bg: rgba(80, 250, 123, 0.15);
+      --badge-emerald-border: rgba(80, 250, 123, 0.35);
+      --badge-rose-text: #ff5555;
+      --badge-rose-bg: rgba(255, 85, 85, 0.15);
+      --badge-rose-border: rgba(255, 85, 85, 0.35);
+      --badge-amber-text: #f1fa8c;
+      --badge-amber-bg: rgba(241, 250, 140, 0.15);
+      --badge-amber-border: rgba(241, 250, 140, 0.35);
+      --badge-purple-text: #bd93f9;
+      --badge-purple-bg: rgba(189, 147, 249, 0.18);
+      --badge-purple-border: rgba(189, 147, 249, 0.4);
+    }
+
+    /* 5. CYBERPUNK NEON (Electric Synthwave Dark) */
+    [data-theme="cyberpunk"] {
+      --bg-main: #0d0221;
+      --panel-bg: rgba(15, 5, 29, 0.96);
+      --card-bg: rgba(26, 16, 53, 0.96);
+      --chip-bg: rgba(45, 27, 86, 0.6);
+      --border-color: #3b2069;
+      --text-main: #fef08a;
+      --text-muted: #f472b6;
+      --branch-stroke: #06b6d4;
+      --node-stroke: rgba(255, 255, 255, 0.6);
+      --tip-label: #ffffff;
+      --tooltip-bg: rgba(13, 2, 33, 0.98);
+      --accent: #f43f5e;
+      --highlight: #facc15;
+      --input-bg: #13042d;
+      --grid-line: rgba(59, 32, 105, 0.3);
+      --badge-sky-text: #38bdf8;
+      --badge-sky-bg: rgba(56, 189, 248, 0.18);
+      --badge-sky-border: rgba(56, 189, 248, 0.4);
+      --badge-emerald-text: #34d399;
+      --badge-emerald-bg: rgba(52, 211, 153, 0.18);
+      --badge-emerald-border: rgba(52, 211, 153, 0.4);
+      --badge-rose-text: #fb7185;
+      --badge-rose-bg: rgba(251, 113, 133, 0.18);
+      --badge-rose-border: rgba(251, 113, 133, 0.4);
+      --badge-amber-text: #facc15;
+      --badge-amber-bg: rgba(250, 204, 21, 0.18);
+      --badge-amber-border: rgba(250, 204, 21, 0.4);
+      --badge-purple-text: #f472b6;
+      --badge-purple-bg: rgba(244, 114, 182, 0.18);
+      --badge-purple-border: rgba(244, 114, 182, 0.4);
+    }
+
+    /* 6. TITANIUM STEEL (Minimalist Deep Zinc Dark) */
+    [data-theme="steel"] {
+      --bg-main: #18181b;
+      --panel-bg: rgba(24, 24, 27, 0.95);
+      --card-bg: rgba(39, 39, 42, 0.95);
+      --chip-bg: rgba(63, 63, 70, 0.5);
+      --border-color: #52525b;
+      --text-main: #fafafa;
+      --text-muted: #a1a1aa;
+      --branch-stroke: #71717a;
+      --node-stroke: rgba(255, 255, 255, 0.5);
+      --tip-label: #f4f4f5;
+      --tooltip-bg: rgba(24, 24, 27, 0.98);
+      --accent: #38bdf8;
+      --highlight: #f59e0b;
+      --input-bg: #27272a;
+      --grid-line: rgba(82, 82, 91, 0.25);
+      --badge-sky-text: #38bdf8;
+      --badge-sky-bg: rgba(56, 189, 248, 0.15);
+      --badge-sky-border: rgba(56, 189, 248, 0.35);
+      --badge-emerald-text: #34d399;
+      --badge-emerald-bg: rgba(52, 211, 153, 0.15);
+      --badge-emerald-border: rgba(52, 211, 153, 0.35);
+      --badge-rose-text: #fb7185;
+      --badge-rose-bg: rgba(251, 113, 133, 0.15);
+      --badge-rose-border: rgba(251, 113, 133, 0.35);
+      --badge-amber-text: #fbbf24;
+      --badge-amber-bg: rgba(251, 191, 36, 0.15);
+      --badge-amber-border: rgba(251, 191, 36, 0.35);
+      --badge-purple-text: #a1a1aa;
+      --badge-purple-bg: rgba(161, 161, 170, 0.15);
+      --badge-purple-border: rgba(161, 161, 170, 0.35);
+    }
+
+    /* 7. WARM ESPRESSO (Dark Sepia & Amber) */
+    [data-theme="espresso"] {
+      --bg-main: #1c1512;
+      --panel-bg: rgba(35, 26, 22, 0.96);
+      --card-bg: rgba(49, 37, 32, 0.96);
+      --chip-bg: rgba(68, 52, 45, 0.5);
+      --border-color: #5a453b;
+      --text-main: #fef3c7;
+      --text-muted: #d97706;
+      --branch-stroke: #b45309;
+      --node-stroke: rgba(254, 243, 199, 0.5);
+      --tip-label: #fde68a;
+      --tooltip-bg: rgba(28, 21, 18, 0.98);
+      --accent: #f59e0b;
+      --highlight: #fbbf24;
+      --input-bg: #2d211c;
+      --grid-line: rgba(90, 69, 59, 0.3);
+      --badge-sky-text: #38bdf8;
+      --badge-sky-bg: rgba(56, 189, 248, 0.15);
+      --badge-sky-border: rgba(56, 189, 248, 0.35);
+      --badge-emerald-text: #34d399;
+      --badge-emerald-bg: rgba(52, 211, 153, 0.15);
+      --badge-emerald-border: rgba(52, 211, 153, 0.35);
+      --badge-rose-text: #fb7185;
+      --badge-rose-bg: rgba(251, 113, 133, 0.15);
+      --badge-rose-border: rgba(251, 113, 133, 0.35);
+      --badge-amber-text: #f59e0b;
+      --badge-amber-bg: rgba(245, 158, 11, 0.18);
+      --badge-amber-border: rgba(245, 158, 11, 0.4);
+      --badge-purple-text: #d97706;
+      --badge-purple-bg: rgba(217, 119, 6, 0.18);
+      --badge-purple-border: rgba(217, 119, 6, 0.4);
+    }
+
+    /* 8. PUBLICATION WHITE (Pristine High-Contrast Light) */
+    [data-theme="light"], [data-theme="publication"] {
+      --bg-main: #ffffff;
+      --panel-bg: rgba(248, 250, 252, 0.98);
+      --card-bg: #ffffff;
+      --chip-bg: #f8fafc;
+      --border-color: #e2e8f0;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --branch-stroke: #1e293b;
+      --node-stroke: rgba(15, 23, 42, 0.7);
+      --tip-label: #0f172a;
+      --tooltip-bg: #ffffff;
+      --accent: #0284c7;
+      --highlight: #b45309;
+      --input-bg: #ffffff;
+      --grid-line: rgba(0, 0, 0, 0.03);
+      --badge-sky-text: #0369a1;
+      --badge-sky-bg: rgba(3, 105, 161, 0.12);
+      --badge-sky-border: rgba(3, 105, 161, 0.35);
+      --badge-emerald-text: #047857;
+      --badge-emerald-bg: rgba(4, 120, 87, 0.12);
+      --badge-emerald-border: rgba(4, 120, 87, 0.35);
+      --badge-rose-text: #be123c;
+      --badge-rose-bg: rgba(190, 18, 60, 0.12);
+      --badge-rose-border: rgba(190, 18, 60, 0.35);
+      --badge-amber-text: #b45309;
+      --badge-amber-bg: rgba(180, 83, 9, 0.12);
+      --badge-amber-border: rgba(180, 83, 9, 0.35);
+      --badge-purple-text: #7e22ce;
+      --badge-purple-bg: rgba(126, 34, 206, 0.12);
+      --badge-purple-border: rgba(126, 34, 206, 0.35);
+    }
+
+    /* 9. SOLARIZED CREAM (Warm Paper Light) */
+    [data-theme="solarized"] {
+      --bg-main: #fdf6e3;
+      --panel-bg: rgba(238, 232, 213, 0.98);
+      --card-bg: #f5eed9;
+      --chip-bg: #e4dbc0;
+      --border-color: #d3cbb7;
+      --text-main: #002b36;
+      --text-muted: #586e75;
+      --branch-stroke: #073642;
+      --node-stroke: rgba(0, 43, 54, 0.7);
+      --tip-label: #002b36;
+      --tooltip-bg: #fdf6e3;
+      --accent: #268bd2;
+      --highlight: #cb4b16;
+      --input-bg: #ffffff;
+      --grid-line: rgba(88, 110, 117, 0.1);
+      --badge-sky-text: #268bd2;
+      --badge-sky-bg: rgba(38, 139, 210, 0.14);
+      --badge-sky-border: rgba(38, 139, 210, 0.4);
+      --badge-emerald-text: #2aa198;
+      --badge-emerald-bg: rgba(42, 161, 152, 0.14);
+      --badge-emerald-border: rgba(42, 161, 152, 0.4);
+      --badge-rose-text: #dc322f;
+      --badge-rose-bg: rgba(220, 50, 47, 0.14);
+      --badge-rose-border: rgba(220, 50, 47, 0.4);
+      --badge-amber-text: #b58900;
+      --badge-amber-bg: rgba(181, 137, 0, 0.14);
+      --badge-amber-border: rgba(181, 137, 0, 0.4);
+      --badge-purple-text: #6c71c4;
+      --badge-purple-bg: rgba(108, 113, 196, 0.14);
+      --badge-purple-border: rgba(108, 113, 196, 0.4);
+    }
+
+    /* 10. NORDIC SNOW (Cool Slate Gray Light) */
+    [data-theme="nordic"] {
+      --bg-main: #eceff4;
+      --panel-bg: rgba(229, 233, 240, 0.98);
+      --card-bg: #e5e9f0;
+      --chip-bg: #d8dee9;
+      --border-color: #c2c9d6;
+      --text-main: #2e3440;
+      --text-muted: #4c566a;
+      --branch-stroke: #2e3440;
+      --node-stroke: rgba(46, 52, 64, 0.7);
+      --tip-label: #2e3440;
+      --tooltip-bg: #eceff4;
+      --accent: #5e81ac;
+      --highlight: #d08770;
+      --input-bg: #ffffff;
+      --grid-line: rgba(76, 86, 106, 0.1);
+      --badge-sky-text: #434c5e;
+      --badge-sky-bg: rgba(94, 129, 172, 0.15);
+      --badge-sky-border: rgba(94, 129, 172, 0.4);
+      --badge-emerald-text: #059669;
+      --badge-emerald-bg: rgba(5, 150, 105, 0.12);
+      --badge-emerald-border: rgba(5, 150, 105, 0.35);
+      --badge-rose-text: #bf616a;
+      --badge-rose-bg: rgba(191, 97, 106, 0.15);
+      --badge-rose-border: rgba(191, 97, 106, 0.4);
+      --badge-amber-text: #d08770;
+      --badge-amber-bg: rgba(208, 135, 112, 0.15);
+      --badge-amber-border: rgba(208, 135, 112, 0.4);
+      --badge-purple-text: #5e81ac;
+      --badge-purple-bg: rgba(94, 129, 172, 0.14);
+      --badge-purple-border: rgba(94, 129, 172, 0.4);
+    }
+
+    /* 11. ARCHIVAL PARCHMENT (Warm Editorial Paper Light) */
+    [data-theme="parchment"] {
+      --bg-main: #fbf9f4;
+      --panel-bg: rgba(245, 241, 232, 0.98);
+      --card-bg: #efe9db;
+      --chip-bg: #e2d9c5;
+      --border-color: #cfc4ac;
+      --text-main: #1c1917;
+      --text-muted: #57534e;
+      --branch-stroke: #292524;
+      --node-stroke: rgba(28, 25, 23, 0.7);
+      --tip-label: #1c1917;
+      --tooltip-bg: #fbf9f4;
+      --accent: #0284c7;
+      --highlight: #b45309;
+      --input-bg: #ffffff;
+      --grid-line: rgba(87, 83, 78, 0.08);
+      --badge-sky-text: #0369a1;
+      --badge-sky-bg: rgba(3, 105, 161, 0.12);
+      --badge-sky-border: rgba(3, 105, 161, 0.35);
+      --badge-emerald-text: #047857;
+      --badge-emerald-bg: rgba(4, 120, 87, 0.12);
+      --badge-emerald-border: rgba(4, 120, 87, 0.35);
+      --badge-rose-text: #be123c;
+      --badge-rose-bg: rgba(190, 18, 60, 0.12);
+      --badge-rose-border: rgba(190, 18, 60, 0.35);
+      --badge-amber-text: #b45309;
+      --badge-amber-bg: rgba(180, 83, 9, 0.12);
+      --badge-amber-border: rgba(180, 83, 9, 0.35);
+      --badge-purple-text: #6b21a8;
+      --badge-purple-bg: rgba(107, 33, 168, 0.12);
+      --badge-purple-border: rgba(107, 33, 168, 0.35);
+    }
+
+    /* 12. FRESH MINT (Botanical Sage Light) */
+    [data-theme="mint"] {
+      --bg-main: #f0fdf4;
+      --panel-bg: rgba(236, 253, 245, 0.98);
+      --card-bg: #dcfce7;
+      --chip-bg: #bbf7d0;
+      --border-color: #86efac;
+      --text-main: #064e3b;
+      --text-muted: #047857;
+      --branch-stroke: #064e3b;
+      --node-stroke: rgba(6, 78, 59, 0.7);
+      --tip-label: #022c22;
+      --tooltip-bg: #f0fdf4;
+      --accent: #059669;
+      --highlight: #d97706;
+      --input-bg: #ffffff;
+      --grid-line: rgba(4, 120, 87, 0.08);
+      --badge-sky-text: #0284c7;
+      --badge-sky-bg: rgba(2, 132, 199, 0.12);
+      --badge-sky-border: rgba(2, 132, 199, 0.35);
+      --badge-emerald-text: #065f46;
+      --badge-emerald-bg: rgba(6, 95, 70, 0.14);
+      --badge-emerald-border: rgba(6, 95, 70, 0.4);
+      --badge-rose-text: #be123c;
+      --badge-rose-bg: rgba(190, 18, 60, 0.12);
+      --badge-rose-border: rgba(190, 18, 60, 0.35);
+      --badge-amber-text: #b45309;
+      --badge-amber-bg: rgba(180, 83, 9, 0.12);
+      --badge-amber-border: rgba(180, 83, 9, 0.35);
+      --badge-purple-text: #065f46;
+      --badge-purple-bg: rgba(6, 95, 70, 0.12);
+      --badge-purple-border: rgba(6, 95, 70, 0.35);
+    }
+
+    /* 13. MONOCHROME AAA HIGH-CONTRAST (Maximal Accessibility Light) */
+    [data-theme="high_contrast"] {
+      --bg-main: #ffffff;
+      --panel-bg: #ffffff;
+      --card-bg: #f4f4f5;
+      --chip-bg: #e4e4e7;
+      --border-color: #71717a;
+      --text-main: #000000;
+      --text-muted: #27272a;
+      --branch-stroke: #000000;
+      --node-stroke: #000000;
+      --tip-label: #000000;
+      --tooltip-bg: #ffffff;
+      --accent: #000000;
+      --highlight: #000000;
+      --input-bg: #ffffff;
+      --grid-line: rgba(0, 0, 0, 0.1);
+      --badge-sky-text: #000000;
+      --badge-sky-bg: rgba(0, 0, 0, 0.08);
+      --badge-sky-border: #000000;
+      --badge-emerald-text: #000000;
+      --badge-emerald-bg: rgba(0, 0, 0, 0.08);
+      --badge-emerald-border: #000000;
+      --badge-rose-text: #000000;
+      --badge-rose-bg: rgba(0, 0, 0, 0.08);
+      --badge-rose-border: #000000;
+      --badge-amber-text: #000000;
+      --badge-amber-bg: rgba(0, 0, 0, 0.08);
+      --badge-amber-border: #000000;
+      --badge-purple-text: #000000;
+      --badge-purple-bg: rgba(0, 0, 0, 0.08);
+      --badge-purple-border: #000000;
+    }
+
+    /* 14. DYNAMIC USER CUSTOM THEME */
+    [data-theme="custom"] {
+      --bg-main: #ffffff;
+      --panel-bg: rgba(248, 250, 252, 0.98);
+      --card-bg: #ffffff;
+      --chip-bg: #f8fafc;
+      --border-color: #e2e8f0;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --branch-stroke: #1e293b;
+      --node-stroke: rgba(15, 23, 42, 0.7);
+      --tip-label: #0f172a;
+      --tooltip-bg: #ffffff;
+      --accent: #0284c7;
+      --highlight: #b45309;
+      --input-bg: #ffffff;
+      --grid-line: rgba(0, 0, 0, 0.03);
+      --badge-sky-text: #0369a1;
+      --badge-sky-bg: rgba(3, 105, 161, 0.1);
+      --badge-sky-border: rgba(3, 105, 161, 0.3);
+      --badge-emerald-text: #047857;
+      --badge-emerald-bg: rgba(4, 120, 87, 0.1);
+      --badge-emerald-border: rgba(4, 120, 87, 0.3);
+      --badge-rose-text: #be123c;
+      --badge-rose-bg: rgba(190, 18, 60, 0.1);
+      --badge-rose-border: rgba(190, 18, 60, 0.3);
+      --badge-amber-text: #b45309;
+      --badge-amber-bg: rgba(180, 83, 9, 0.1);
+      --badge-amber-border: rgba(180, 83, 9, 0.3);
+      --badge-purple-text: #7e22ce;
+      --badge-purple-bg: rgba(126, 34, 206, 0.1);
+      --badge-purple-border: rgba(126, 34, 206, 0.3);
+    }
+
+    .badge-purple {
+      background-color: var(--badge-purple-bg);
+      border: 1px solid var(--badge-purple-border);
+      color: var(--badge-purple-text);
+    }
+
+    .badge-sky {
+      background-color: var(--badge-sky-bg);
+      border: 1px solid var(--badge-sky-border);
+      color: var(--badge-sky-text);
+    }
+    .badge-emerald {
+      background-color: var(--badge-emerald-bg);
+      border: 1px solid var(--badge-emerald-border);
+      color: var(--badge-emerald-text);
+    }
+    .badge-rose {
+      background-color: var(--badge-rose-bg);
+      border: 1px solid var(--badge-rose-border);
+      color: var(--badge-rose-text);
+    }
+    .badge-amber {
+      background-color: var(--badge-amber-bg);
+      border: 1px solid var(--badge-amber-border);
+      color: var(--badge-amber-text);
+    }
+
+    /* SPT Brand Toolkit Case - Bespoke Burgundy & Brass Instrument Case (User Palette) */
+    .spt-toolkit-handle {
+      border: 2px solid #c69a45;
+      border-bottom: none;
+      background: #232a36;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+      transition: all 0.2s ease;
+    }
+    .spt-toolkit-grip {
+      background: #c69a45;
+      box-shadow: 0 0 2px rgba(198, 154, 69, 0.7);
+    }
+    .spt-toolkit-chassis {
+      background: linear-gradient(180deg, #5c161d 0%, #3d0f15 42%, #0a0d14 100%);
+      border: 1px solid #701a22;
+      box-shadow: 0 3px 10px -1px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      transition: all 0.2s ease;
+    }
+    .spt-toolkit-bracket {
+      border-color: #c69a45;
+    }
+    .spt-toolkit-nameplate {
+      color: #fff1c2;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+    }
+    .spt-toolkit-rivet {
+      background-color: #c69a45;
+      box-shadow: 0 0 3px rgba(198, 154, 69, 0.85);
+    }
+    .spt-toolkit-bay-tree {
+      background-color: #070a10;
+      border: 1px solid #6b4c1d;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.7);
+      transition: all 0.2s ease;
+    }
+    .spt-toolkit-bay-structure {
+      background-color: #070a10;
+      border: 1px solid #0f3d61;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.7);
+      transition: all 0.2s ease;
+    }
+    .group:hover .spt-toolkit-chassis {
+      border-color: #991b1b;
+      box-shadow: 0 4px 14px -1px rgba(92, 22, 29, 0.6), 0 0 10px rgba(198, 154, 69, 0.3);
+    }
+    .group:hover .spt-toolkit-handle {
+      border-color: #eab308;
+    }
+
+        body {
+      background-color: var(--bg-main);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+    }
+
+    #treeSvg {
+      cursor: grab;
+      user-select: none;
+      background-color: var(--bg-main);
+      background-image: 
+        linear-gradient(var(--grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+      background-size: 32px 32px;
+      transition: background-color 0.25s ease;
+    }
+    #treeSvg.no-grid {
+      background-image: none !important;
+    }
+    #treeSvg:active {
+      cursor: grabbing;
+    }
+
+    .branch-path {
+      vector-effect: non-scaling-stroke;
+      stroke: var(--branch-stroke);
+      stroke-width: var(--branch-width, 1.35px);
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+      transition: stroke 0.15s, stroke-width 0.15s;
+    }
+    .branch-path:hover {
+      stroke: var(--accent) !important;
+      stroke-width: 2.8px;
+    }
+
+    /* REFINED, NON-DISTRACTING NODE DOTS */
+    .node-dot {
+      vector-effect: non-scaling-stroke;
+      stroke: var(--node-stroke);
+      stroke-width: 0.75px;
+      transition: r 0.15s, fill 0.15s, stroke 0.15s;
+      cursor: pointer;
+    }
+    .node-dot:hover {
+      r: 6.5px !important;
+      stroke: var(--accent) !important;
+      stroke-width: 1.2px !important;
+    }
+
+    .tip-label {
+      font-size: var(--tree-tip-size, 10px);
+      fill: var(--tip-label);
+      font-weight: 600;
+      cursor: pointer;
+      user-select: none;
+      dominant-baseline: central;
+      transition: fill 0.15s;
+    }
+    .tip-label-radial, .tip-label-unrooted {
+      font-size: var(--radial-tip-size, 10px) !important;
+      dominant-baseline: central;
+    }
+    .tip-label:hover {
+      fill: var(--accent);
+      font-weight: 700;
+    }
+    .tip-label.selected {
+      fill: var(--highlight);
+      font-weight: bold;
+    }
+    .tip-label-sub {
+      font-size: 9.5px;
+      fill: var(--text-muted);
+      cursor: pointer;
+      user-select: none;
+    }
+    :root[data-labels-hidden="true"] .tip-label,
+    :root[data-labels-hidden="true"] .tip-label-sub {
+      display: none !important;
+    }
+
+    /* CONSISTENT FIXED-WIDTH SIDEBAR */
+    #sidebar {
+      width: 340px !important;
+      min-width: 340px !important;
+      max-width: 340px !important;
+      flex-basis: 340px !important;
+      flex-shrink: 0 !important;
+      flex-grow: 0 !important;
+      box-sizing: border-box !important;
+      overflow-x: hidden !important;
+    }
+    #selectedCard {
+      width: 100% !important;
+      max-width: 340px !important;
+      box-sizing: border-box !important;
+      overflow: hidden !important;
+    }
+
+    /* TRIANGULAR COLLAPSED CLADE WEDGE */
+    .clade-wedge {
+      vector-effect: non-scaling-stroke;
+      cursor: pointer;
+      transition: fill-opacity 0.15s, stroke-width 0.15s, filter 0.15s;
+    }
+    .clade-wedge:hover {
+      fill-opacity: 0.75 !important;
+      stroke-width: 2.2px !important;
+      filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.4));
+    }
+
+    .clade-summary-label {
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
+    }
+    .clade-summary-sub {
+      font-size: 9.5px;
+      fill: var(--text-muted);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    /* TANGLEGRAM CONNECTORS */
+    .tangle-connector {
+      vector-effect: non-scaling-stroke;
+      fill: none;
+      stroke: rgba(148, 163, 184, 0.28);
+      stroke-width: 1.2px;
+      transition: stroke 0.2s, stroke-width 0.2s, opacity 0.2s;
+      cursor: pointer;
+    }
+    .tangle-connector:hover, .tangle-connector.highlighted {
+      vector-effect: non-scaling-stroke;
+      stroke-width: 2.8px !important;
+      stroke: var(--accent) !important;
+      opacity: 1.0 !important;
+    }
+
+    .custom-scroll::-webkit-scrollbar {
+      width: 5px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: var(--border-color);
+      border-radius: 4px;
+    }
+
+    .active-tab {
+      color: var(--accent) !important;
+      border-bottom: 2px solid var(--accent) !important;
+      font-weight: 700 !important;
+    }
+    .filter-dimmed {
+      opacity: 0.12 !important;
+      filter: grayscale(80%);
+      transition: opacity 0.2s ease, filter 0.2s ease;
+    }
+    .filter-match {
+      opacity: 1.0 !important;
+      transition: opacity 0.2s ease;
+    }

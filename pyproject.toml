@@ -53,8 +53,17 @@ dev = [
 ]
 
 [project.scripts]
-viral-phylo = "scripts.viral_phylogenetics:main"
-embed-cluster = "scripts.embed_and_cluster:main"
+viral-phylo = "viral_phylo.cli:main"
+embed-cluster = "viral_phylo.embeddings:main"
+build-tree-view = "viral_phylo.web.builder:main"
+build-alignments = "viral_phylo.web.alignments:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["viral_phylo*"]
+
+[tool.setuptools.package-data]
+"viral_phylo.web" = ["template/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

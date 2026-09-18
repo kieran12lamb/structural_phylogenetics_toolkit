@@ -55,6 +55,39 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(args.input_folder, "my_structures")
         self.assertEqual(args.matrix, "both")
 
+    def test_cli_parser_fetch_alphafold(self):
+        args = self.parser.parse_args([
+            "fetch",
+            "--source", "alphafold",
+            "-u", "P00520,P04637",
+            "--format", "pdb",
+            "--download-pae",
+            "-o", "afdb_dir"
+        ])
+        self.assertEqual(args.subcommand, "fetch")
+        self.assertEqual(args.source, "alphafold")
+        self.assertEqual(args.uniprot, "P00520,P04637")
+        self.assertEqual(args.format, "pdb")
+        self.assertTrue(args.download_pae)
+        self.assertEqual(args.output_dir, "afdb_dir")
+
+    def test_cli_parser_pipeline_alphafold(self):
+        args = self.parser.parse_args([
+            "pipeline",
+            "--source", "alphafold",
+            "-u", "P00520,P04637",
+            "--tree-type", "3di",
+            "--download-pae",
+            "-o", "afdb_pipeline_results"
+        ])
+        self.assertEqual(args.subcommand, "pipeline")
+        self.assertEqual(args.source, "alphafold")
+        self.assertEqual(args.uniprot, "P00520,P04637")
+        self.assertEqual(args.tree_type, "3di")
+        self.assertTrue(args.download_pae)
+        self.assertEqual(args.output_dir, "afdb_pipeline_results")
+
+
     def test_matrix_discovery(self):
         matrices_dir = str(self.repo_root / "matrices")
         af_path = ensure_matrix_file("alphafold", matrices_dir=matrices_dir)
@@ -75,6 +108,26 @@ class TestCLI(unittest.TestCase):
         self.assertIsNotNone(py2)
         self.assertTrue(os.path.isfile(py2))
         self.assertTrue(os.access(py2, os.X_OK))
+
+
+    def test_cli_parser_alignment_coverage_and_multi_alignment(self):
+        """Verify --min-coverage and --multi-alignment in align and pipeline subcommands."""
+        # Align subcommand with coverage options
+        args_align = self.parser.parse_args([
+            "align", "-i", "structures", "-o", "alignments",
+            "--min-coverage", "0.70", "--multi-alignment", "--filter-coverage"
+        ])
+        self.assertEqual(args_align.min_coverage, 0.70)
+        self.assertTrue(args_align.multi_alignment)
+        self.assertTrue(args_align.filter_coverage)
+
+        # Pipeline subcommand with coverage options
+        args_pipe = self.parser.parse_args([
+            "pipeline", "--input-folder", "structures",
+            "--min-coverage", "0.75", "--multi-alignment"
+        ])
+        self.assertEqual(args_pipe.min_coverage, 0.75)
+        self.assertTrue(args_pipe.multi_alignment)
 
 
 if __name__ == "__main__":

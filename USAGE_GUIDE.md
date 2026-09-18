@@ -114,9 +114,14 @@ python scripts/viral_phylogenetics.py pipeline [options]
 
 | Argument | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `-q`, `--qualifier` | str | `glycoprotein` | Protein search term if fetching from Viro3D (e.g. `glycoprotein`, `rdrp`, `spike`, `capsid`). |
-| `-c`, `--count` | int | `6` | Maximum number of structures to download from Viro3D. |
-| `-i`, `--input-folder` | path | `None` | Path to local folder containing `.pdb` or `.cif` structures (skips Viro3D download). |
+| `--source` | choice | `viro3d` | Structure repository source: `viro3d` or `alphafold` (AFDB). |
+| `-u`, `--uniprot` | str | `None` | Comma-separated UniProt ID(s) when fetching from AlphaFold DB (e.g. `P00520,P04637,Q99720`). |
+| `--uniprot-file` | path | `None` | Path to text file containing one UniProt ID per line. |
+| `--format` | choice | `pdb` | Coordinate file format for AlphaFold DB: `pdb` or `cif`. |
+| `--download-pae` | flag | `False` | Also download Predicted Aligned Error (PAE) JSON matrix from AlphaFold DB. |
+| `-q`, `--qualifier` | str | `glycoprotein` | Protein search term if fetching from Viro3D or resolving via UniProt API (e.g. `glycoprotein`, `rdrp`, `spike`, `capsid`). |
+| `-c`, `--count` | int | `6` | Maximum number of structures to download. |
+| `-i`, `--input-folder` | path | `None` | Path to local folder containing `.pdb` or `.cif` structures (skips remote download). |
 | `--aligner` | choice | `foldmason` | Multiple sequence alignment engine: `foldmason` (default, structural MSTA) or `mafft` (sequence & 3Di alignment). |
 | `--tree-type` | choice | `both` | Trees to infer: `3di` (structural), `aa` (sequence), `both`, or `tanglegram`. |
 | `-m`, `--method` | choice | `iqtree` | Phylogeny method: `iqtree` (ML with 3Di matrices) or `foldmason` (progressive guide tree). |
@@ -162,18 +167,41 @@ python scripts/viral_phylogenetics.py pipeline [options]
 ---
 
 ### Subcommand: `fetch`
-Searches the Viro3D database via REST API, downloads PDB coordinate files concurrently using a thread pool, and saves a JSON metadata index.
+Searches and downloads structures from **AlphaFold Database (AFDB)** or **Viro3D** concurrently using worker threads, saving coordinate files and a standardized `taxa_metadata.json` index.
 
+#### 1. Download from AlphaFold Database (AFDB)
+Query by specific UniProt accession ID(s) or protein search term:
+```bash
+# Fetch specific proteins by UniProt accession with PAE matrices
+python scripts/viral_phylogenetics.py fetch \
+  --source alphafold \
+  -u "Q99720, P87666, P0DTC2, P08667, P03452, P03437" \
+  --format pdb \
+  --download-pae \
+  --output-dir afdb_structures
+
+# Query AlphaFold DB via search resolution (UniProt API)
+python scripts/viral_phylogenetics.py fetch \
+  --source alphafold \
+  -q "henipavirus glycoprotein" \
+  --max-sequences 6 \
+  --output-dir afdb_structures
+```
+
+#### 2. Download from Viro3D
 ```bash
 python scripts/viral_phylogenetics.py fetch \
+  --source viro3d \
   --qualifier rdrp \
   --max-sequences 100 \
   --output-dir viro_rdrp_structures
 ```
 
 **Key Outputs:**
-- `viro_rdrp_structures/*.pdb`: Relaxed 3D coordinate files.
-- `viro_rdrp_structures/taxa_metadata.json`: Index containing protein name, taxonomy family, genus, host, and UniProt IDs.
+- `afdb_structures/*.pdb` (or `*.cif`): Relaxed 3D coordinate files.
+- `afdb_structures/AF-*-predicted_aligned_error.json`: Optional PAE error matrices.
+- `afdb_structures/taxa_metadata.json`: Standardized metadata index containing protein name, organism, gene, length, mean pLDDT score, and pLDDT category.
+
 
 ---
 

@@ -320,9 +320,169 @@ class TestInteractiveTree(unittest.TestCase):
         self.assertIn('"clade-sectors"', content)
         self.assertIn('settings.labelOrientation === "horizontal"', content)
 
+    def test_alphafold_database_querying_studio(self):
+        """Verify that the Pipeline & Structure Studio supports querying AlphaFold DB (AFDB)."""
+        content = self.html_path.read_text(encoding="utf-8")
+
+        # Verify studio title and source selector buttons
+        self.assertIn("Pipeline &amp; Structure Studio", content)
+        self.assertIn('id="btnPipeSourceAlphaFold"', content)
+        self.assertIn("setPipelineSource('alphafold')", content)
+
+        # Verify AlphaFold DB input section, format selector, and PAE toggle
+        self.assertIn('id="pipeAlphaFoldSection"', content)
+        self.assertIn('id="pipeAfdbInput"', content)
+        self.assertIn('id="pipeAfdbFormatSelect"', content)
+        self.assertIn('id="pipeAfdbPaeToggle"', content)
+
+        # Verify check button and JS client query functions
+        self.assertIn('id="btnAfdbCheck"', content)
+        self.assertIn('id="afdbCheckStatus"', content)
+        self.assertIn("function queryAlphaFoldApi()", content)
+        self.assertIn("function setAlphaFoldPreset(", content)
+
+        # Verify AFDB API endpoint integration
+        self.assertIn("https://alphafold.ebi.ac.uk/api/prediction/", content)
+        self.assertIn("--source alphafold", content)
+
+    def test_bootstrap_support_branch_coloring(self):
+        """Verify that branch bootstrap support coloring and IQ-TREE support parsing are present."""
+        content = self.html_path.read_text(encoding="utf-8")
+
+        # Verify UI controls in Tree Display panel
+        self.assertIn('id="toggleSupportColor"', content)
+        self.assertIn('id="selectSupportMetric"', content)
+        self.assertIn('id="selectSupportPalette"', content)
+        self.assertIn('id="supportPalettePreview"', content)
+        self.assertIn('id="branchSupportLegend"', content)
+        self.assertIn('id="branchSupportLegendBody"', content)
+
+        # Verify default settings
+        self.assertIn('colorBranchesBySupport: false', content)
+        self.assertIn('supportMetric: "ufboot"', content)
+        self.assertIn('supportPalette: "traffic"', content)
+
+        # Verify support functions
+        self.assertIn('function getBranchStrokeColor(node)', content)
+        self.assertIn('function toggleSupportColoring(val)', content)
+        self.assertIn('function setSupportMetric(m)', content)
+        self.assertIn('function setSupportPalette(p)', content)
+
+        # Verify composite Newick support parsing (UFboot and SH-aLRT)
+        self.assertIn('node.supportRaw', content)
+        self.assertIn('node.ufboot', content)
+        self.assertIn('node.alrt', content)
+
+        # Verify tooltip breakdown for bootstrap values
+        self.assertIn('UFboot Support:', content)
+        self.assertIn('SH-aLRT Support:', content)
+
+        # Verify vertical branch gradient between horizontal branches
+        self.assertIn('function applyVerticalBranchGradient(vLine, node, minY, maxY, defs)', content)
+        self.assertIn('gradientUnits', content)
+        self.assertIn('userSpaceOnUse', content)
+        self.assertIn('applyVerticalBranchGradient(vLine', content)
+
+
+    def test_background_grid_toggle_and_unrooted_enhancements(self):
+        """Verify background grid toggle (UI + HUD) and high-density unrooted tree features."""
+        content = self.html_path.read_text(encoding="utf-8")
+
+        # 1. Background grid toggle CSS and elements
+        self.assertIn("#treeSvg.no-grid", content)
+        self.assertIn('id="toggleShowGrid"', content)
+        self.assertIn('id="btnToggleGrid"', content)
+        self.assertIn('id="btnToggleGridLabel"', content)
+        self.assertIn("function toggleBackgroundGrid(", content)
+        self.assertIn("showGrid: true", content)
+
+        # 2. Unrooted tree controls in display tab
+        self.assertIn('id="unrootedControlsCard"', content)
+        self.assertIn('id="selectUnrootedLenMode"', content)
+        self.assertIn('id="toggleUnrootedDaylight"', content)
+        self.assertIn('id="selectUnrootedLabelFilter"', content)
+        self.assertIn('id="toggleStaggerLabels"', content)
+
+        # 3. Unrooted tree settings and helper functions
+        self.assertIn('unrootedLengthMode: "sqrt"', content)
+        self.assertIn('unrootedDaylight: true', content)
+        self.assertIn('unrootedLabelFilter: "smart"', content)
+        self.assertIn('staggerLabels: true', content)
+        self.assertIn("function setUnrootedLengthMode(", content)
+        self.assertIn("function toggleUnrootedDaylight(", content)
+        self.assertIn("function setUnrootedLabelFilter(", content)
+        self.assertIn("function toggleStaggerLabels(", content)
+
+        # 4. Equal-daylight fan spreading and smart label decluttering logic
+        self.assertIn("layoutEqualAngle", content)
+        self.assertIn("Equal-Daylight vs Equal-Angle weight calculation", content)
+        self.assertIn("Math.pow(lc, 0.72) + 0.35", content)
+        self.assertIn("settings.unrootedLabelFilter", content)
+        self.assertIn("settings.staggerLabels", content)
+
+
+    def test_alignment_coverage_threshold_and_partitions_ui(self):
+        """Verify 70% coverage threshold UI controls, JS helpers, and multi-alignment partitions."""
+        content = self.html_path.read_text(encoding="utf-8")
+
+        # 1. Alignment Drawer UI controls for coverage threshold & partitions
+        self.assertIn('id="selectAlignmentPartition"', content)
+        self.assertIn('id="msaCoverageThreshold"', content)
+        self.assertIn('id="btnFilterCoverage"', content)
+
+        # 2. Run/Fetch Pipeline Generator controls
+        self.assertIn('id="pipeCoverageInput"', content)
+        self.assertIn('id="pipeMultiAlnToggle"', content)
+
+        # 3. JavaScript state & functions
+        self.assertIn("coverageThreshold: 0.70", content)
+        self.assertIn("filterCoverage: false", content)
+        self.assertIn("activePartition: \"all\"", content)
+        self.assertIn("function getSequenceCoverage(", content)
+        self.assertIn("function setMsaCoverageThreshold(", content)
+        self.assertIn("function toggleFilterCoverage(", content)
+        self.assertIn("function setMsaPartition(", content)
+
+        # 4. Command line generator includes coverage options
+        self.assertIn("--min-coverage", content)
+        self.assertIn("--multi-alignment", content)
+
+        # 5. Tree Synchronization with Coverage Filter & Partitions
+        self.assertIn("function isTreeFilteringActive()", content)
+        self.assertIn("function syncDatasetAlignmentCoverage(", content)
+        self.assertIn("isCovFiltering", content)
+        self.assertIn("isPartFiltering", content)
+        self.assertIn("Core Align (≥70% Cov)", content)
+        self.assertIn("Alignment Coverage (%)", content)
+
+
+    def test_esm2_umap_scatter_view(self):
+        """Verify ESM-2 2D UMAP scatter projection view, controls, and radar synchronization."""
+        content = self.html_path.read_text(encoding="utf-8")
+
+        # 1. Embedded UMAP projection datasets
+        self.assertIn('"esm2_umap":', content)
+        self.assertIn("UMAP-1 (ESM-2 Latent Dimension 1)", content)
+        self.assertIn("UMAP-2 (ESM-2 Latent Dimension 2)", content)
+
+        # 2. UI view switcher buttons
+        self.assertIn('id="btnUmap"', content)
+        self.assertIn('id="esmViewModeSection"', content)
+        self.assertIn('id="btnEsmViewTree"', content)
+        self.assertIn('id="btnEsmViewUmap"', content)
+        self.assertIn('id="umapControlsCard"', content)
+
+        # 3. JavaScript handlers & render pipeline
+        self.assertIn("function setEsmViewMode(", content)
+        self.assertIn("function renderUmapScatter(", content)
+        self.assertIn('settings.layout === "umap"', content)
+        self.assertIn("UMAP RADAR", content)
+        self.assertIn("umapPointCoords", content)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
 
