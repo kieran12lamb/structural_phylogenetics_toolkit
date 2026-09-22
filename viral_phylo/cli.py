@@ -155,7 +155,12 @@ def main():
     elif args.subcommand == "tree":
         aln_file = args.alignment
         if os.path.isdir(aln_file):
-            aln_file = os.path.join(aln_file, "foldmason.fasta_3di.fa")
+            for cand in ["mafft.fasta_3di.fa", "foldmason.fasta_3di.fa", "foldmason_3di.fa"]:
+                if os.path.isfile(os.path.join(aln_file, cand)):
+                    aln_file = os.path.join(aln_file, cand)
+                    break
+            else:
+                aln_file = os.path.join(aln_file, "foldmason.fasta_3di.fa")
         build_tree(
             alignment_file=aln_file,
             method=args.method,
@@ -317,6 +322,10 @@ def main():
             if not os.path.isfile(embed_script):
                 embed_script = "scripts/embed_and_cluster.py"
             aa_aln = os.path.join(aln_dir, "foldmason.fasta_aa.fa")
+            for cand in ["mafft.fasta_aa.fa", "foldmason.fasta_aa.fa", "foldmason_aa.fa"]:
+                if os.path.isfile(os.path.join(aln_dir, cand)):
+                    aa_aln = os.path.join(aln_dir, cand)
+                    break
             embed_src = aa_aln if os.path.isfile(aa_aln) else pdb_dir
             target_py = find_torch_python()
             cmd = [

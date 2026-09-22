@@ -152,6 +152,13 @@ def filter_alignment_by_coverage(
             out_aa = os.path.join(output_dir, f"foldmason_cov{cov_pct}_filtered.fasta_aa.fa")
             write_alignment_fasta(filtered_aa, out_aa)
 
+        if "mafft" in os.path.basename(aln_3di_path).lower():
+            m_3di = os.path.join(output_dir, f"mafft_cov{cov_pct}_filtered.fasta_3di.fa")
+            shutil.copyfile(out_3di, m_3di)
+            if out_aa and os.path.isfile(out_aa):
+                m_aa = os.path.join(output_dir, f"mafft_cov{cov_pct}_filtered.fasta_aa.fa")
+                shutil.copyfile(out_aa, m_aa)
+
     return {
         "passed_taxa": passed_taxa,
         "removed_taxa": removed_taxa,
@@ -393,22 +400,27 @@ def align_structures(
         subprocess.run([foldmason_bin, "convert2fasta", sdb_prefix, unaligned_aa], check=True)
         subprocess.run([foldmason_bin, "convert2fasta", f"{sdb_prefix}_ss", unaligned_3di], check=True)
 
-        # Output alignment paths (matching foldmason conventions for downstream compatibility)
+        # Output alignment paths: explicitly save MAFFT alignment files and also maintain foldmason names for downstream compatibility
+        mafft_3di = os.path.join(output_dir, "mafft.fasta_3di.fa")
+        mafft_aa = os.path.join(output_dir, "mafft.fasta_aa.fa")
         aln_3di = os.path.join(output_dir, "foldmason.fasta_3di.fa")
         aln_aa = os.path.join(output_dir, "foldmason.fasta_aa.fa")
 
         print(f"[MAFFT] Aligning 3Di structural sequences with substitution matrix '{actual_mat3di}'...")
-        with open(aln_3di, "w") as f_out:
+        with open(mafft_3di, "w") as f_out:
             subprocess.run([actual_mafft, "--aamatrix", actual_mat3di, "--auto", unaligned_3di], stdout=f_out, check=True)
 
         print(f"[MAFFT] Aligning amino acid sequences...")
-        with open(aln_aa, "w") as f_out:
+        with open(mafft_aa, "w") as f_out:
             subprocess.run([actual_mafft, "--auto", unaligned_aa], stdout=f_out, check=True)
 
-        if not os.path.isfile(aln_3di) or os.path.getsize(aln_3di) == 0:
-            raise FileNotFoundError(f"Expected MAFFT 3Di alignment '{aln_3di}' was not generated.")
-        print(f"[MAFFT] Alignment complete: generated '{aln_3di}' and '{aln_aa}'.\n")
-        return aln_3di
+        # Mirror alignments to foldmason.fasta_*.fa for full backward compatibility with downstream pipeline tools
+        shutil.copyfile(mafft_3di, aln_3di)
+        shutil.copyfile(mafft_aa, aln_aa)
+
+        if not os.path.isfile(mafft_3di) or os.path.getsize(mafft_3di) == 0:
+            raise FileNotFoundError(f"Expected MAFFT 3Di alignment '{mafft_3di}' was not generated.")
+        print(f"[MAFFT] Alignment complete: generated '{mafft_3di}' and '{mafft_aa}' (also linked as '{aln_3di}' and '{aln_aa}').\n")
 
     else:
         # Default FoldMason easy-msa
@@ -423,26 +435,26 @@ def align_structures(
         subprocess.run(cmd, check=True)
 
         aln_3di = os.path.join(output_dir, "foldmason.fasta_3di.fa")
+        aln_aa = os.path.join(output_dir, "foldmason.fasta_aa.fa")
         if not os.path.isfile(aln_3di):
             raise FileNotFoundError(f"Expected 3Di alignment '{aln_3di}' was not generated.")
         print(f"[FoldMason] Alignment complete: generated '{aln_3di}'.\n")
 
-        # Multi-Alignment Partitioning or Single Coverage Filtering
-        if multi_alignment and min_coverage is not None and min_coverage > 0:
-            multi_summary = partition_structures_by_coverage(
-                pdb_dir,
-                output_dir,
-                min_coverage=min_coverage,
-                aligner=aligner,
-                foldmason_bin=foldmason_bin,
-                mafft_bin=mafft_bin,
-                mafft_matrix=mafft_matrix,
-            )
-            return aln_3di
-        elif filter_coverage and min_coverage is not None and min_coverage > 0:
-            aln_aa = os.path.join(output_dir, "foldmason.fasta_aa.fa")
-            filter_res = filter_alignment_by_coverage(aln_3di, aln_aa, min_coverage=min_coverage, output_dir=output_dir)
-            print(f"[Coverage Filter] Filtered to {len(filter_res['passed_taxa'])} taxa (>= {int(min_coverage*100)}% coverage). Removed {len(filter_res['removed_taxa'])} taxa.")
-            return filter_res['out_3di'] or aln_3di
-
+    # Multi-Alignment Partitioning or Single Coverage Filtering (supported for both FoldMason and MAFFT)
+    if multi_alignment and min_coverage is not None and min_coverage > 0:
+        multi_summary = partition_structures_by_coverage(
+            pdb_dir,
+            output_dir,
+            min_coverage=min_coverage,
+            aligner=aligner,
+            foldmason_bin=foldmason_bin,
+            mafft_bin=mafft_bin,
+            mafft_matrix=mafft_matrix,
+        )
         return aln_3di
+    elif filter_coverage and min_coverage is not None and min_coverage > 0:
+        filter_res = filter_alignment_by_coverage(aln_3di, aln_aa, min_coverage=min_coverage, output_dir=output_dir)
+        print(f"[Coverage Filter] Filtered to {len(filter_res['passed_taxa'])} taxa (>= {int(min_coverage*100)}% coverage). Removed {len(filter_res['removed_taxa'])} taxa.")
+        return filter_res['out_3di'] or aln_3di
+
+    return aln_3di

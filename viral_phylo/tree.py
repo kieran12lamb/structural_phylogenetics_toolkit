@@ -37,6 +37,7 @@ def build_tree(
 
     if os.path.isdir(alignment_file):
         candidates = [
+            os.path.join(alignment_file, "mafft.fasta_3di.fa"),
             os.path.join(alignment_file, "foldmason.fasta_3di.fa"),
             os.path.join(alignment_file, "foldmason_3di.fa"),
         ]
@@ -54,7 +55,7 @@ def build_tree(
             print(f"[Path] Auto-resolved directory to 3Di alignment: '{found}'")
             alignment_file = found
         else:
-            raise FileNotFoundError(f"Alignment directory '{alignment_file}' does not contain 'foldmason.fasta_3di.fa' or any 3Di alignment file.")
+            raise FileNotFoundError(f"Alignment directory '{alignment_file}' does not contain 'mafft.fasta_3di.fa', 'foldmason.fasta_3di.fa', or any 3Di alignment file.")
 
     if not os.path.isfile(alignment_file):
         raise FileNotFoundError(f"Alignment file '{alignment_file}' not found. Please provide a path to a FASTA alignment file (e.g., 300_rdrp/alignment/foldmason.fasta_3di.fa).")
@@ -144,6 +145,7 @@ def build_tree(
         if not alignment_aa:
             dir_p = os.path.dirname(alignment_file)
             cand_aa = [
+                os.path.join(dir_p, "mafft.fasta_aa.fa"),
                 os.path.join(dir_p, "foldmason.fasta_aa.fa"),
                 os.path.join(dir_p, "foldmason_aa.fa"),
                 alignment_file.replace("_3di.fa", "_aa.fa"),

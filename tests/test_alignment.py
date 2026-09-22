@@ -119,6 +119,25 @@ class TestAlignment(unittest.TestCase):
             # Check that output file exists and has stripped gap columns
             self.assertTrue(Path(f_res["out_3di"]).exists())
 
+    def test_filter_alignment_mafft_prefix(self):
+        """Verify that filtering creates mafft-prefixed files when input filename contains mafft."""
+        from viral_phylo.alignment import filter_alignment_by_coverage, write_alignment_fasta
+        import tempfile
+
+        test_aln = {
+            "Core1": "AAAAAAAA",
+            "Core2": "AAAAAA--",
+            "Frag1": "AA------",
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            f_3di = Path(tmpdir) / "mafft.fasta_3di.fa"
+            write_alignment_fasta(test_aln, str(f_3di))
+
+            f_res = filter_alignment_by_coverage(str(f_3di), min_coverage=0.70, output_dir=tmpdir)
+            self.assertTrue(Path(f_res["out_3di"]).exists())
+            mafft_filtered = Path(tmpdir) / "mafft_cov70_filtered.fasta_3di.fa"
+            self.assertTrue(mafft_filtered.exists(), "mafft_cov70_filtered.fasta_3di.fa should be created")
+
 
 if __name__ == "__main__":
     unittest.main()

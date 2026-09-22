@@ -28,7 +28,11 @@ def find_cluster_partitions(base_aln_dir):
     for c_dir in sorted(glob.glob(str(Path(base_aln_dir) / "cluster_*_cov*"))):
         c_path = Path(c_dir)
         c_3di = c_path / "foldmason.fasta_3di.fa"
+        if not c_3di.exists():
+            c_3di = c_path / "mafft.fasta_3di.fa"
         c_aa = c_path / "foldmason.fasta_aa.fa"
+        if not c_aa.exists():
+            c_aa = c_path / "mafft.fasta_aa.fa"
         if c_3di.exists() and c_aa.exists():
             c_3di_seqs = parse_fasta(c_3di)
             c_aa_seqs = parse_fasta(c_aa)
@@ -175,7 +179,11 @@ def build_alignments_data(repo_dir: Optional[Path] = None, results_dir: Optional
         if not d.is_dir() or d.name.startswith(".") or d.name in known_core_aln:
             continue
         c3 = d / "alignment/foldmason.fasta_3di.fa"
+        if not c3.exists():
+            c3 = d / "alignment/mafft.fasta_3di.fa"
         ca = d / "alignment/foldmason.fasta_aa.fa"
+        if not ca.exists():
+            ca = d / "alignment/mafft.fasta_aa.fa"
         if c3.exists() and ca.exists():
             custom_3di = parse_fasta(c3)
             custom_aa = parse_fasta(ca)
