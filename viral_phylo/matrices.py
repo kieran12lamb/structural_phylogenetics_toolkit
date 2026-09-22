@@ -55,7 +55,7 @@ def ensure_matrix_file(matrix_key: str, matrices_dir: str = "matrices") -> str:
     if os.path.isfile(target) and os.path.getsize(target) > 0:
         return target
 
-    print(f"Downloading {meta[desc]} from Edmond...")
+    print(f"Downloading {meta['desc']} from Edmond...")
     req = urllib.request.Request(meta["url"], headers={"User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(req) as resp, open(target, "wb") as f:
         f.write(resp.read())

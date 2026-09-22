@@ -4,6 +4,7 @@ import argparse
 import glob
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -24,6 +25,7 @@ from viral_phylo.alignment import (
     compute_alignment_coverage,
 )
 from viral_phylo.tree import build_tree
+from viral_phylo.metadata import parse_metadata
 
 def build_cli_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
