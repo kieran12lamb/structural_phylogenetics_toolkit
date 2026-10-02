@@ -1,23 +1,61 @@
+import json
 import unittest
 from pathlib import Path
 
+from viral_phylo.web.report import assemble_html
+
+
+def _cohort(title, has_esm, n_taxa=60, **extra):
+    """Build a synthetic cohort large enough that the chunk-window assertions below
+    stay inside a single dataset entry, as they do for real cohorts."""
+    cohort = {
+        "title": title,
+        "has_esm": has_esm,
+        "taxa": {
+            f"taxon_{i:03d}": {"taxon_id": f"taxon_{i:03d}", "family": "Demo"}
+            for i in range(n_taxa)
+        },
+    }
+    cohort.update(extra)
+    return cohort
+
 
 class TestInteractiveTree(unittest.TestCase):
+    """Assert against the page assembled from the tracked templates in
+    viral_phylo/web/template/, NOT against a built interactive_tree.html.
+
+    The built artifact is generated output and is deliberately untracked, so
+    reading it here would make the suite depend on whether a pipeline has been
+    run. assemble_html() is the same function the builder uses, so these tests
+    still cover the real template, CSS, viewer JS and dataset wiring.
+    """
+
+    DATASETS_FIXTURE = {
+        "1193": _cohort("\U0001f9ec 1,193 Nipah ESMFold Structures", True,
+                        esm2_umap={"x": [0.0], "y": [0.0], "taxa": ["taxon_000"]}),
+        "500": _cohort("\U0001f9ec 500 Viral Glycoproteins", True),
+        "6": _cohort("\U0001f9ec 6 Benchmark Glycoproteins", True,
+                     congruence={"3di_vs_esm2_cosine": {"rf_distance": 0}}),
+        "100": _cohort("\U0001f9ec 100 RNA-dependent RNA Polymerases", False),
+    }
+
     def setUp(self):
         self.repo_root = Path(__file__).resolve().parent.parent
-        self.html_path = self.repo_root / "interactive_tree.html"
+        self.content = assemble_html(
+            json.dumps(self.DATASETS_FIXTURE),
+            "v1.0.0 (abc1234)",
+            "",
+        )
 
     def test_interactive_tree_exists_and_valid(self):
-        self.assertTrue(self.html_path.exists(), "interactive_tree.html must exist at repo root")
-        content = self.html_path.read_text(encoding="utf-8")
-        
-        # Verify file size (standalone with embedded precomputations is > 2 MB)
-        self.assertGreater(len(content), 1_000_000)
+        content = self.content
 
-        # Verify critical script assets and fallbacks
-        self.assertIn("results/ca_500_structures.js", content)
-        self.assertIn("results/ca_100_structures.js", content)
-        self.assertIn("results/alignments_data.js", content)
+        # Assembled page carries the full inlined CSS and viewer JS
+        self.assertGreater(len(content), 400_000)
+
+        # The builder substitutes the data script tags into this placeholder;
+        # assert the contract exists rather than the substituted result.
+        self.assertIn("<!-- DATA_SCRIPTS_PLACEHOLDER -->", content)
 
         # Verify cohorts embedded
         self.assertIn('"1193":', content)
@@ -32,9 +70,9 @@ class TestInteractiveTree(unittest.TestCase):
         self.assertIn("REPRODUCIBILITY.md", content)
 
     def test_example_pdbs_exist(self):
-        """Verify that the 6 benchmark example PDB structures exist in results/glycoprotein_workflow/structures."""
-        structures_dir = self.repo_root / "results/glycoprotein_workflow/structures"
-        self.assertTrue(structures_dir.exists(), "results/glycoprotein_workflow/structures must exist")
+        """Verify that the 6 benchmark example PDB structures exist in tests/fixtures/structures."""
+        structures_dir = self.repo_root / "tests/fixtures/structures"
+        self.assertTrue(structures_dir.exists(), "tests/fixtures/structures must exist")
         pdbs = list(structures_dir.glob("*.pdb"))
         self.assertEqual(len(pdbs), 6, f"Expected exactly 6 example PDB structures, found {len(pdbs)}")
         for pdb in pdbs:
@@ -42,7 +80,7 @@ class TestInteractiveTree(unittest.TestCase):
 
     def test_uncomputed_esm_options_greyed_out(self):
         """Verify that datasets without ESM embeddings are flagged and uncomputed options are handled."""
-        content = self.html_path.read_text(encoding="utf-8")
+        content = self.content
         self.assertIn("function updateModalityOptions()", content)
         self.assertIn("🤖 ESM-2 PLM Tree (Not Run in Pipeline)", content)
         self.assertIn("(Not Run)", content)
@@ -68,7 +106,7 @@ class TestInteractiveTree(unittest.TestCase):
 
     def test_themes_and_scoped_banner_layout(self):
         """Verify that multi-theme switching and compact scoped clade positioning are present."""
-        content = self.html_path.read_text(encoding="utf-8")
+        content = self.content
 
         # Verify expanded theme collection exists in CSS
         self.assertIn('[data-theme="dark"]', content)
@@ -106,7 +144,7 @@ class TestInteractiveTree(unittest.TestCase):
 
     def test_palette_creator_studio(self):
         """Verify that the custom Palette Creator Studio, hex string parsing, and colour wheel picker are embedded."""
-        content = self.html_path.read_text(encoding="utf-8")
+        content = self.content
 
         # Verify Palette Modal & UI buttons
         self.assertIn('id="paletteModal"', content)
@@ -135,7 +173,7 @@ class TestInteractiveTree(unittest.TestCase):
 
     def test_alignment_viewer_synchronization(self):
         """Verify that the alignment viewer updates synchronously with tree filtering, rooting, scoping, and themes."""
-        content = self.html_path.read_text(encoding="utf-8")
+        content = self.content
 
         # Verify default sync with tree selection is enabled
         self.assertIn("syncWithTree: true", content)
@@ -151,7 +189,7 @@ class TestInteractiveTree(unittest.TestCase):
 
     def test_custom_theme_studio(self):
         """Verify that the interactive Custom Theme Studio modal, presets, and JS engine are properly integrated."""
-        content = self.html_path.read_text(encoding="utf-8")
+        content = self.content
 
         # Verify [data-theme="custom"] CSS definition
         self.assertIn('[data-theme="custom"]', content)
@@ -182,7 +220,7 @@ class TestInteractiveTree(unittest.TestCase):
 
     def test_light_mode_aesthetics_and_contrast(self):
         """Verify that light themes have crisp publication surfaces and high-contrast badges."""
-        content = self.html_path.read_text(encoding="utf-8")
+        content = self.content
 
         # Verify .badge-purple class and variables
         self.assertIn(".badge-purple", content)
@@ -195,7 +233,7 @@ class TestInteractiveTree(unittest.TestCase):
 
     def test_toolkit_branding_and_logo(self):
         """Verify that the header is renamed to The Structural Phylogenetics Toolkit and has C-alpha logo + toolkit emoji."""
-        content = self.html_path.read_text(encoding="utf-8")
+        content = self.content
 
         # Verify page title and header h1
         self.assertIn("<title>The Structural Phylogenetics Toolkit</title>", content)
@@ -226,7 +264,7 @@ class TestInteractiveTree(unittest.TestCase):
 
     def test_tip_label_metadata_selection(self):
         """Verify dynamic tip label selector, metadata resolution, and data-taxon attribute decoupling."""
-        content = self.html_path.read_text(encoding="utf-8")
+        content = self.content
 
         # Verify selector DOM elements exist
         self.assertIn('id="tipLabelColumnSelect"', content)
@@ -250,7 +288,7 @@ class TestInteractiveTree(unittest.TestCase):
 
     def test_export_newick_and_zip_package(self):
         """Verify Newick export and ZIP archive package export buttons, functions, and error resilience."""
-        content = self.html_path.read_text(encoding="utf-8")
+        content = self.content
 
         # Verify buttons in header
         self.assertIn('onclick="exportNewick()"', content)
@@ -276,7 +314,7 @@ class TestInteractiveTree(unittest.TestCase):
 
     def test_radial_and_unrooted_readability_controls(self):
         """Verify advanced iTOL & FigTree inspired readability controls for Radial and Unrooted trees."""
-        content = self.html_path.read_text(encoding="utf-8")
+        content = self.content
 
         # Verify layout-specific control cards exist in HTML
         self.assertIn('id="radialControlsCard"', content)
@@ -322,7 +360,7 @@ class TestInteractiveTree(unittest.TestCase):
 
     def test_alphafold_database_querying_studio(self):
         """Verify that the Pipeline & Structure Studio supports querying AlphaFold DB (AFDB)."""
-        content = self.html_path.read_text(encoding="utf-8")
+        content = self.content
 
         # Verify studio title and source selector buttons
         self.assertIn("Pipeline &amp; Structure Studio", content)
@@ -347,7 +385,7 @@ class TestInteractiveTree(unittest.TestCase):
 
     def test_bootstrap_support_branch_coloring(self):
         """Verify that branch bootstrap support coloring and IQ-TREE support parsing are present."""
-        content = self.html_path.read_text(encoding="utf-8")
+        content = self.content
 
         # Verify UI controls in Tree Display panel
         self.assertIn('id="toggleSupportColor"', content)
@@ -386,7 +424,7 @@ class TestInteractiveTree(unittest.TestCase):
 
     def test_background_grid_toggle_and_unrooted_enhancements(self):
         """Verify background grid toggle (UI + HUD) and high-density unrooted tree features."""
-        content = self.html_path.read_text(encoding="utf-8")
+        content = self.content
 
         # 1. Background grid toggle CSS and elements
         self.assertIn("#treeSvg.no-grid", content)
@@ -423,7 +461,7 @@ class TestInteractiveTree(unittest.TestCase):
 
     def test_alignment_coverage_threshold_and_partitions_ui(self):
         """Verify 70% coverage threshold UI controls, JS helpers, and multi-alignment partitions."""
-        content = self.html_path.read_text(encoding="utf-8")
+        content = self.content
 
         # 1. Alignment Drawer UI controls for coverage threshold & partitions
         self.assertIn('id="selectAlignmentPartition"', content)
@@ -458,7 +496,7 @@ class TestInteractiveTree(unittest.TestCase):
 
     def test_esm2_umap_scatter_view(self):
         """Verify ESM-2 2D UMAP scatter projection view, controls, and radar synchronization."""
-        content = self.html_path.read_text(encoding="utf-8")
+        content = self.content
 
         # 1. Embedded UMAP projection datasets
         self.assertIn('"esm2_umap":', content)
@@ -488,3 +526,24 @@ if __name__ == "__main__":
 
 
 
+
+
+class TestAlphabetLengths(unittest.TestCase):
+    """Regression: the viewer used one length (from the 3Di alignment) for both
+    alphabets. MAFFT aligns AA and 3Di separately, so their lengths differ and AA
+    mode was silently truncated or over-read."""
+
+    def test_bundle_records_a_length_per_alphabet(self):
+        from viral_phylo.web.alignments import annotate_alphabet_lengths
+        data = {"run": {"length": 5, "aa": {"t1": "ACDEFGH"}, "3di": {"t1": "ACDEF"},
+                        "partitions": {"p1": {"aa": {"t1": "AC-D"}, "3di": {"t1": "ACD"}}}}}
+        annotate_alphabet_lengths(data)
+        self.assertEqual(data["run"]["lengths"], {"aa": 7, "3di": 5})
+        self.assertEqual(data["run"]["length"], 5, "legacy field must be left unchanged")
+        self.assertEqual(data["run"]["partitions"]["p1"]["lengths"], {"aa": 4, "3di": 3})
+
+    def test_viewer_reads_the_length_for_the_active_alphabet(self):
+        content = assemble_html(json.dumps(TestInteractiveTree.DATASETS_FIXTURE), "v1.0.0 (abc1234)", "")
+        self.assertIn("function alignLength(align)", content)
+        self.assertIn("align.lengths[mode]", content)
+        self.assertNotIn("origLen = align.length", content)

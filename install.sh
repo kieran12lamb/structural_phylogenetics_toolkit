@@ -31,7 +31,9 @@ echo "==> [1/6] Using package manager: $CONDA_CMD"
 
 # 2. Create or Update Conda Environment
 ENV_EXISTS=false
-if $CONDA_CMD env list | grep -q "^${ENV_NAME} "; then
+# `conda env list` shows named environments by name, and environments created with
+# --prefix by their path; accept either form, e.g. "spt" or ".../envs/spt".
+if $CONDA_CMD env list | awk '{print $1, $NF}' | grep -qE "(^| |/)${ENV_NAME}( |$)"; then
     ENV_EXISTS=true
 fi
 
@@ -72,12 +74,18 @@ $CONDA_CMD run -n "$ENV_NAME" python3 -c "
 import sys, shutil
 
 # A. External Bioinformatics Binaries
-tools = ['foldmason', 'iqtree', 'mafft']
+#    foldmason - structural alignment and 3Di extraction; mafft - alternative aligner;
+#    iqtree - ML trees; foldseek / mmseqs - structural / sequence clustering;
+#    VeryFastTree (or FastTree) - the whole-set tree and IQ-TREE starting trees.
+tools = ['foldmason', 'iqtree', 'mafft', 'mmseqs', 'foldseek']
 missing_tools = [t for t in tools if not shutil.which(t)]
+fasttree = next((t for t in ('VeryFastTree', 'veryfasttree', 'FastTreeMP', 'FastTree', 'fasttree') if shutil.which(t)), None)
+if not fasttree:
+    missing_tools.append('VeryFastTree/FastTree')
 if missing_tools:
     print('    ⚠️ Note: External binaries missing from PATH:', missing_tools)
 else:
-    print('    ✓ External structural bioinformatics tools: foldmason, iqtree, mafft')
+    print(f'    ✓ External tools: foldmason, iqtree, mafft, mmseqs, foldseek, {fasttree}')
 
 # B. Core Python Dependencies
 packages = [
@@ -117,6 +125,13 @@ try:
         print(f'    ⚡ PyTorch hardware acceleration: CUDA GPU ({device_name})')
     elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
         print('    ⚡ PyTorch hardware acceleration: Apple Silicon (MPS)')
+    elif torch.version.cuda and shutil.which('nvidia-smi'):
+        # GPUs are present but this torch build cannot use them - usually a torch
+        # built for a newer CUDA than the installed driver supports.
+        print(f'    ⚠️ PyTorch is built for CUDA {torch.version.cuda} but cannot use the GPU; the driver is')
+        print('       probably older than that CUDA version (compare nvidia-smi). Embeddings will run on CPU.')
+        print('       To use the GPU, install a torch build matching the driver, e.g. for CUDA 12.1:')
+        print('         pip install torch --index-url https://download.pytorch.org/whl/cu121')
     else:
         print('    ℹ️ PyTorch execution: CPU mode')
 except Exception:
@@ -155,6 +170,12 @@ echo ""
 echo "Or using python scripts directly:"
 echo "    python3 scripts/viral_phylogenetics.py --help"
 echo ""
-echo "Open the interactive visualization suite:"
-echo "    open interactive_tree.html"
+echo "Run a first pipeline on the bundled test structures (from this directory):"
+echo "    viral-phylo pipeline --input-folder tests/fixtures/structures --output-dir results/demo --fast"
+echo ""
+echo "Each run writes an interactive dashboard and a run manifest:"
+echo "    results/demo/interactive_tree.html   results/demo/run_manifest.txt"
+echo ""
+echo "Note: run the pipeline from the repository root - the 3Di matrices in"
+echo "matrices/ are resolved relative to the working directory."
 echo "========================================================================"

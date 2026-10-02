@@ -25,7 +25,10 @@ def find_cluster_partitions(base_aln_dir):
     partitions = {}
     if not Path(base_aln_dir).exists():
         return partitions
-    for c_dir in sorted(glob.glob(str(Path(base_aln_dir) / "cluster_*_cov*"))):
+    # Cluster directories are named by the partitioning method that produced them
+    # ("..._cov70" for the legacy coverage partitioner, "..._e1.0" for similarity
+    # clustering), so match the common prefix rather than one method's suffix.
+    for c_dir in sorted(glob.glob(str(Path(base_aln_dir) / "cluster_*"))):
         c_path = Path(c_dir)
         c_3di = c_path / "foldmason.fasta_3di.fa"
         if not c_3di.exists():
@@ -59,6 +62,44 @@ def find_cluster_partitions(base_aln_dir):
                 }
     return partitions
 
+
+def _iter_result_dirs(results_dir):
+    """List entries under results/, tolerating the directory being absent.
+
+    results/ holds generated output and is not tracked, so a fresh clone has no
+    such directory. Auto-discovery of custom workflows must then find nothing
+    rather than raising.
+    """
+    try:
+        return sorted(Path(results_dir).iterdir())
+    except (FileNotFoundError, NotADirectoryError, OSError):
+        return []
+
+
+
+def annotate_alphabet_lengths(node):
+    """Record the column count of each alphabet's alignment on every dataset.
+
+    FoldMason writes AA and 3Di as one alignment in two alphabets, so they share a
+    length. MAFFT aligns each alphabet separately, so they generally differ - on the
+    Nipah clusters by up to ~10% (e.g. 272 AA vs 252 3Di columns). The viewer used a
+    single ``length`` taken from the 3Di alignment for both modes, silently
+    truncating or over-reading the AA alignment in AA mode.
+
+    Adds ``lengths = {"aa": ..., "3di": ...}`` alongside the existing ``length``,
+    which is kept as-is for compatibility. Recurses into partitions.
+    """
+    if isinstance(node, dict):
+        aa, tdi = node.get("aa"), node.get("3di")
+        if isinstance(aa, dict) and isinstance(tdi, dict) and aa and tdi:
+            node["lengths"] = {
+                "aa": len(next(iter(aa.values()))),
+                "3di": len(next(iter(tdi.values()))),
+            }
+        for value in node.values():
+            if isinstance(value, dict):
+                annotate_alphabet_lengths(value)
+    return node
 
 def build_alignments_data(repo_dir: Optional[Path] = None, results_dir: Optional[Path] = None) -> Dict[str, Any]:
     """Generate alignments_data.js for all datasets and write to standard targets."""
@@ -175,7 +216,7 @@ def build_alignments_data(repo_dir: Optional[Path] = None, results_dir: Optional
         }
 
     known_core_aln = {"1193", "500", "6", "100", "nipah_esm_workflow", "glycoprotein_workflow", "rdrp_100_workflow"}
-    for d in sorted(results_dir.iterdir()):
+    for d in _iter_result_dirs(results_dir):
         if not d.is_dir() or d.name.startswith(".") or d.name in known_core_aln:
             continue
         c3 = d / "alignment/foldmason.fasta_3di.fa"
@@ -199,6 +240,7 @@ def build_alignments_data(repo_dir: Optional[Path] = None, results_dir: Optional
                     "partitions": find_cluster_partitions(d / "alignment")
                 }
 
+    annotate_alphabet_lengths(alignments)
     js_content = "window.ALIGNMENTS_DATA = " + json.dumps(alignments) + ";\n"
 
     targets = [
@@ -209,7 +251,7 @@ def build_alignments_data(repo_dir: Optional[Path] = None, results_dir: Optional
         results_dir / "rdrp_100_workflow/alignments_data.js",
     ]
 
-    for d in sorted(results_dir.iterdir()):
+    for d in _iter_result_dirs(results_dir):
         if d.is_dir() and not d.name.startswith(".") and d.name not in ["foldmason_500_alignments", "foldmason_alignments", "foldmason_glycoproteins", "viro_3d_structures", "viro_500_glycoproteins", "viro_glycoproteins", "phylogeny_500_results", "phylogeny_results"]:
             targets.append(d / "alignments_data.js")
             if (d / "phylogeny").exists():

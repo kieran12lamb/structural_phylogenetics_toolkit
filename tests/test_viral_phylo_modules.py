@@ -28,7 +28,7 @@ from viral_phylo.metadata import (
     EXPANDED_PALETTE,
     KNOWN_VALUE_COLORS,
 )
-from viral_phylo.web.builder import assemble_html
+from viral_phylo.web.report import assemble_html
 from viral_phylo.web.alignments import parse_fasta, compute_cov_dict
 
 

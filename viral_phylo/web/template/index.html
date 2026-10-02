@@ -226,24 +226,35 @@
     <!-- LEFT FLOATING CONTROLS & MANAGEMENT SIDEBAR (Consistent Fixed Width) -->
     <div id="sidebar" class="w-[340px] min-w-[340px] max-w-[340px] border-r border-[var(--border-color)] bg-[var(--panel-bg)] backdrop-blur-md flex flex-col z-20 shrink-0 h-full overflow-hidden">
       
-      <!-- SIDEBAR TAB NAVIGATION (5 Tabs: View, Filter, Clades, Root, Run/Fetch) -->
-      <div class="flex border-b border-[var(--border-color)] text-xs shrink-0 bg-[var(--card-bg)]">
-        <button id="tabBtnDisplay" onclick="switchSidebarTab('display')" class="flex-1 py-2 text-center font-bold text-sky-400 border-b-2 border-sky-400 text-[11px] transition flex items-center justify-center space-x-0.5" title="Display & Layout Settings">
-          <span>⚙️ View</span>
+      <!-- SIDEBAR TAB NAVIGATION (7 Tabs: View, Filter, Cuts, Align, Clade, Root, Run/Fetch) -->
+      <div class="flex border-b border-[var(--border-color)] shrink-0 bg-[var(--card-bg)]">
+        <button id="tabBtnDisplay" onclick="switchSidebarTab('display')" class="flex-1 py-1.5 text-center font-bold text-sky-400 border-b-2 border-sky-400 transition flex flex-col items-center justify-center leading-tight" title="Display & Layout Settings">
+          <span class="text-[13px] leading-none">⚙️</span>
+          <span class="text-[8.5px] mt-0.5 flex items-center gap-0.5">View</span>
         </button>
-        <button id="tabBtnFilter" onclick="switchSidebarTab('filter')" class="flex-1 py-2 text-center font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] border-b-2 border-transparent text-[11px] transition flex items-center justify-center space-x-0.5" title="Metadata Taxa Filter">
-          <span>🎯 Filter</span>
-          <span id="tabFilterBadge" class="ml-0.5 text-[8.5px] font-mono px-1 rounded-full bg-emerald-500/20 text-emerald-400 font-bold">All</span>
+        <button id="tabBtnFilter" onclick="switchSidebarTab('filter')" class="flex-1 py-1.5 text-center font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] border-b-2 border-transparent transition flex flex-col items-center justify-center leading-tight" title="Metadata Taxa Filter">
+          <span class="text-[13px] leading-none">🎯</span>
+          <span class="text-[8.5px] mt-0.5 flex items-center gap-0.5">Filter<span id="tabFilterBadge" class="text-[7.5px] font-mono px-0.5 rounded-full bg-emerald-500/20 text-emerald-400">All</span></span>
         </button>
-        <button id="tabBtnClades" onclick="switchSidebarTab('clades')" class="flex-1 py-2 text-center font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] border-b-2 border-transparent text-[11px] transition flex items-center justify-center space-x-0.5" title="Clade Management">
-          <span>🌿 Clades</span>
-          <span id="tabCladeCountBadge" class="ml-0.5 text-[8.5px] font-mono px-1 rounded-full bg-sky-500/20 text-sky-400">0</span>
+        <button id="tabBtnCuts" onclick="switchSidebarTab('cuts')" class="flex-1 py-1.5 text-center font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] border-b-2 border-transparent transition flex flex-col items-center justify-center leading-tight" title="Cluster / Clade Cut Selection">
+          <span class="text-[13px] leading-none">🧩</span>
+          <span class="text-[8.5px] mt-0.5 flex items-center gap-0.5">Cuts<span id="tabCutsBadge" class="text-[7.5px] font-mono px-0.5 rounded-full bg-sky-500/20 text-sky-400">0</span></span>
         </button>
-        <button id="tabBtnRooting" onclick="switchSidebarTab('rooting')" class="flex-1 py-2 text-center font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] border-b-2 border-transparent text-[11px] transition flex items-center justify-center space-x-0.5" title="Tree Rooting">
-          <span>⚓ Root</span>
+        <button id="tabBtnAlign" onclick="switchSidebarTab('align')" class="flex-1 py-1.5 text-center font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] border-b-2 border-transparent transition flex flex-col items-center justify-center leading-tight" title="Alignment Partition Selection">
+          <span class="text-[13px] leading-none">🧬</span>
+          <span class="text-[8.5px] mt-0.5 flex items-center gap-0.5">Align<span id="tabAlignBadge" class="text-[7.5px] font-mono px-0.5 rounded-full bg-amber-500/20 text-amber-400">0</span></span>
         </button>
-        <button id="tabBtnPipeline" onclick="switchSidebarTab('pipeline')" class="flex-1 py-2 text-center font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] border-b-2 border-transparent text-[11px] transition flex items-center justify-center space-x-0.5" title="Run Pipeline & Query Viro3D">
-          <span>🚀 Run</span>
+        <button id="tabBtnClades" onclick="switchSidebarTab('clades')" class="flex-1 py-1.5 text-center font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] border-b-2 border-transparent transition flex flex-col items-center justify-center leading-tight" title="Clade Management">
+          <span class="text-[13px] leading-none">🌿</span>
+          <span class="text-[8.5px] mt-0.5 flex items-center gap-0.5">Clade<span id="tabCladeCountBadge" class="text-[7.5px] font-mono px-0.5 rounded-full bg-sky-500/20 text-sky-400">0</span></span>
+        </button>
+        <button id="tabBtnRooting" onclick="switchSidebarTab('rooting')" class="flex-1 py-1.5 text-center font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] border-b-2 border-transparent transition flex flex-col items-center justify-center leading-tight" title="Tree Rooting">
+          <span class="text-[13px] leading-none">⚓</span>
+          <span class="text-[8.5px] mt-0.5 flex items-center gap-0.5">Root</span>
+        </button>
+        <button id="tabBtnPipeline" onclick="switchSidebarTab('pipeline')" class="flex-1 py-1.5 text-center font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] border-b-2 border-transparent transition flex flex-col items-center justify-center leading-tight" title="Run Pipeline & Query Viro3D">
+          <span class="text-[13px] leading-none">🚀</span>
+          <span class="text-[8.5px] mt-0.5 flex items-center gap-0.5">Run</span>
         </button>
       </div>
 
@@ -262,6 +273,14 @@
               <option value="6">🔬 6 Benchmark Glycoproteins</option>
               <!-- EXTRA_SCALE_OPTIONS -->
             </select>
+            <!-- Load a user-supplied tree file (+ optional metadata) -->
+            <div class="grid grid-cols-2 gap-1.5 mt-2">
+              <button type="button" onclick="document.getElementById('customTreeFileInput').click()" title="Open a Newick or NEXUS tree file (.nwk, .treefile, .tre, .nex)" class="py-1.5 rounded-md font-medium text-center border border-[var(--border-color)] bg-[var(--chip-bg)] hover:border-sky-400 text-[var(--text-main)] text-[10.5px] transition">📂 Load tree file</button>
+              <button type="button" id="customMetadataBtn" disabled onclick="document.getElementById('customMetadataFileInput').click()" title="Load a tree file first" class="py-1.5 rounded-md font-medium text-center border border-[var(--border-color)] bg-[var(--chip-bg)] hover:border-sky-400 text-[var(--text-main)] text-[10.5px] transition disabled:opacity-40 disabled:cursor-not-allowed">🏷️ Add metadata</button>
+            </div>
+            <input type="file" id="customTreeFileInput" class="hidden" accept=".nwk,.newick,.tre,.tree,.treefile,.nex,.nexus,.nxs,.txt" onchange="onCustomTreeFileChosen(this)">
+            <input type="file" id="customMetadataFileInput" class="hidden" accept=".csv,.tsv,.tab,.txt,.json" onchange="onCustomMetadataFileChosen(this)">
+            <p id="customTreeStatus" class="hidden mt-1.5 text-[10px] leading-snug text-[var(--text-muted)] break-words select-text"></p>
           </div>
 
           <!-- Layout Selector -->
@@ -864,18 +883,18 @@
           </div>
         </div>
 
-                <!-- ================= TAB 2: CLADE MANAGEMENT ================= -->
-        <div id="panelClades" class="hidden space-y-3.5">
+        <!-- ================= TAB: CLUSTER / CLADE CUT SELECTION ================= -->
+        <div id="panelCuts" class="hidden space-y-3.5">
           <!-- Overview Status Card -->
           <div class="p-3 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] shadow-sm space-y-2">
             <div class="flex items-center justify-between">
-              <span class="font-bold text-[var(--accent)] text-xs">Clade Scoping &amp; Summarization</span>
-              <span id="cladeStatBadge" class="badge-emerald text-[9.5px] font-mono px-2 py-0.5 rounded-full font-bold">1,193 / 1,193 visible</span>
+              <span class="font-bold text-[var(--accent)] text-xs">Cluster &amp; Cut Selection</span>
+              <span id="cutsStatBadge" class="badge-emerald text-[9.5px] font-mono px-2 py-0.5 rounded-full font-bold"></span>
             </div>
             <p class="text-[10px] text-[var(--text-muted)] leading-relaxed">
-              Partition highly divergent sequences by <strong>PLM silhouette cuts</strong> or <strong>phylogenetic divergence</strong> to isolate clades across the entire analysis suite, or condense subtrees into wedges.
+              Choose the partition source and cut level (k), then pick a cluster to scope the whole analysis to it. Collapsing and wedge summarization live in the <strong>Clade</strong> tab.
             </p>
-            <div id="cladeToast" class="hidden text-[10px] p-2 rounded bg-sky-500/15 border border-sky-400/40 text-sky-400 transition-all"></div>
+            <div id="cutsToast" class="hidden text-[10px] p-2 rounded bg-sky-500/15 border border-sky-400/40 text-sky-400 transition-all"></div>
           </div>
 
           <!-- SECTION 1: CLADE PARTITIONING & SCOPED ANALYSIS -->
@@ -946,6 +965,65 @@
               </div>
               <div id="cladePartitionRoster" class="space-y-2 max-h-64 overflow-y-auto pr-1 custom-scroll"></div>
             </div>
+          </div>
+        </div>
+
+        <!-- ================= TAB: ALIGNMENT PARTITION SELECTION ================= -->
+        <div id="panelAlign" class="hidden space-y-3.5">
+          <!-- Overview Status Card -->
+          <div class="p-3 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] shadow-sm space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-[var(--accent)] text-xs">Alignment Selection</span>
+              <span id="alignStatBadge" class="badge-amber text-[9.5px] font-mono px-2 py-0.5 rounded-full font-bold"></span>
+            </div>
+            <p class="text-[10px] text-[var(--text-muted)] leading-relaxed">
+              Pick the full alignment or a per-cluster sub-alignment. The selection drives the MSA viewer and the tree together.
+            </p>
+            <div id="alignToast" class="hidden text-[10px] p-2 rounded bg-amber-500/15 border border-amber-400/40 text-amber-400 transition-all"></div>
+          </div>
+
+          <!-- ALIGNMENT ROSTER -->
+          <div class="space-y-3 bg-[var(--card-bg)] p-3 rounded-lg border border-amber-500/30 shadow-sm">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-amber-700 dark:text-amber-400 text-xs flex items-center gap-1.5">
+                <span>🧬</span> Alignment Partitions
+              </span>
+              <span id="alignActiveBadge" class="badge-amber text-[9px] font-mono px-2 py-0.5 rounded-full font-bold">Full Alignment</span>
+            </div>
+
+            <!-- Sort + minimum-size filter -->
+            <div class="flex items-center justify-between gap-1.5">
+              <select id="alignSortSelect" onchange="setAlignSort(this.value)" class="flex-1 bg-[var(--input-bg)] border border-amber-500/40 rounded-md px-2 py-1 text-[10px] text-[var(--text-main)] font-medium focus:outline-none focus:border-amber-400">
+                <option value="size" selected>Sort: most sequences</option>
+                <option value="coverage">Sort: mean coverage</option>
+                <option value="length">Sort: alignment columns</option>
+                <option value="name">Sort: name</option>
+              </select>
+              <button id="btnToggleMinAlignFilter" onclick="toggleMinAlignFilter()" class="badge-amber text-[8.5px] px-1.5 py-1 rounded font-semibold cursor-pointer transition hover:opacity-90 whitespace-nowrap" title="Toggle visibility of partitions with fewer than 5 sequences">
+                🛡️ &ge;5 Seqs: ON
+              </button>
+            </div>
+
+            <!-- Roster -->
+            <div class="space-y-1.5">
+              <label class="font-semibold text-[var(--text-muted)] uppercase tracking-wider block text-[9.5px]">Available Alignments (<span id="alignRosterCount">0</span>)</label>
+              <div id="alignPartitionRoster" class="space-y-2 max-h-[26rem] overflow-y-auto pr-1 custom-scroll"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= TAB: CLADE MANAGEMENT ================= -->
+        <div id="panelClades" class="hidden space-y-3.5">
+          <!-- Overview Status Card -->
+          <div class="p-3 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] shadow-sm space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-[var(--accent)] text-xs">Clade Collapse &amp; Summarization</span>
+              <span id="cladeStatBadge" class="badge-emerald text-[9.5px] font-mono px-2 py-0.5 rounded-full font-bold">1,193 / 1,193 visible</span>
+            </div>
+            <p class="text-[10px] text-[var(--text-muted)] leading-relaxed">
+              Condense subtrees into wedges and group clades by metadata. Choosing a partition source and cut level lives in the <strong>Cuts</strong> tab.
+            </p>
+            <div id="cladeToast" class="hidden text-[10px] p-2 rounded bg-sky-500/15 border border-sky-400/40 text-sky-400 transition-all"></div>
           </div>
 
           <!-- SECTION 2: SUBTREE COLLAPSE & WEDGE SUMMARIZATION (ACCORDION) -->
@@ -1516,11 +1594,11 @@
               <span id="msaStripGapsLabel">Strip Gaps: ON</span>
             </button>
 
-            <!-- Alignment Partition / Cluster Selector (for Multi-Alignment Datasets) -->
+            <!-- Active alignment partition (selection lives in the Align sidebar tab) -->
             <div class="flex items-center space-x-1 shrink-0" id="msaPartitionWrapper">
-              <select id="selectAlignmentPartition" onchange="setMsaPartition(this.value)" class="bg-[var(--input-bg)] border border-amber-500/40 text-amber-300 rounded px-1.5 py-1 text-[10px] font-semibold focus:outline-none focus:border-amber-400 max-w-[140px] cursor-pointer" title="Select Multiple Alignment Partition (e.g. >=70% coverage clusters)">
-                <option value="all" selected>📦 Full Alignment</option>
-              </select>
+              <button onclick="switchSidebarTab('align')" id="msaPartitionChip" class="bg-[var(--input-bg)] border border-amber-500/40 text-amber-300 rounded px-1.5 py-1 text-[10px] font-semibold hover:border-amber-400 transition cursor-pointer max-w-[150px] truncate" title="Change the active alignment in the Align tab">
+                📦 Full Alignment
+              </button>
             </div>
 
             <!-- Alignment Coverage Threshold & Filter Controls -->

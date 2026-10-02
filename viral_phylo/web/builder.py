@@ -19,6 +19,7 @@ import re
 from pathlib import Path
 import numpy as np
 from viral_phylo.metadata import parse_metadata, EXPANDED_PALETTE, KNOWN_VALUE_COLORS
+from viral_phylo.web.report import assemble_html
 
 repo_dir = Path(__file__).resolve().parent.parent.parent
 results_dir = repo_dir / "results"
@@ -41,52 +42,63 @@ except Exception:
 
 tool_version_str = f"v{version_base} ({commit_hash})"
 
+
+def _read_text(path, default=""):
+    """Read a demo-dataset file, tolerating absence.
+
+    The bundled demo cohorts under results/ are generated output and are no longer
+    tracked, so a fresh clone has none of them. Importing this module must still
+    succeed - `build-tree-view --help` and the test suite both import it - so a
+    missing dataset yields an empty string and is skipped downstream rather than
+    raising at import time.
+    """
+    try:
+        return Path(path).read_text(encoding="utf-8").strip()
+    except (FileNotFoundError, NotADirectoryError, IsADirectoryError, OSError):
+        return default
+
+
 # 1. Load Tree Files
-with open(results_dir / "phylogeny_500_results/viral_tree_both.treefile") as f:
-    newick_500_3di = f.read().strip()
+newick_500_3di = _read_text(results_dir / "phylogeny_500_results/viral_tree_both.treefile")
+newick_500_aa = _read_text(results_dir / "phylogeny_500_results/viral_tree_aa.treefile")
 
-with open(results_dir / "phylogeny_500_results/viral_tree_aa.treefile") as f:
-    newick_500_aa = f.read().strip()
+newick_6_3di = _read_text(results_dir / "glycoprotein_workflow/phylogeny/glycoprotein_tree_both.treefile")
+newick_6_aa = _read_text(results_dir / "glycoprotein_workflow/phylogeny/aa_tree.treefile")
 
-with open(results_dir / "glycoprotein_workflow/phylogeny/glycoprotein_tree_both.treefile") as f:
-    newick_6_3di = f.read().strip()
-
-with open(results_dir / "glycoprotein_workflow/phylogeny/aa_tree.treefile") as f:
-    newick_6_aa = f.read().strip()
-
-with open(results_dir / "nipah_esm_workflow/phylogeny/nipah_tree_3di.treefile") as f:
-    newick_1193_3di = f.read().strip()
-
-with open(results_dir / "nipah_esm_workflow/phylogeny/nipah_tree_aa.treefile") as f:
-    newick_1193_aa = f.read().strip()
+newick_1193_3di = _read_text(results_dir / "nipah_esm_workflow/phylogeny/nipah_tree_3di.treefile")
+newick_1193_aa = _read_text(results_dir / "nipah_esm_workflow/phylogeny/nipah_tree_aa.treefile")
 
 # Multi-distance metric ESM-2 PLM trees (Cosine, Euclidean, L1/Manhattan)
-with open(results_dir / "glycoprotein_workflow/phylogeny/glycoprotein_tree_esm2_cosine.treefile") as f:
-    newick_6_esm2_cosine = f.read().strip()
-with open(results_dir / "glycoprotein_workflow/phylogeny/glycoprotein_tree_esm2_euclidean.treefile") as f:
-    newick_6_esm2_euclidean = f.read().strip()
-with open(results_dir / "glycoprotein_workflow/phylogeny/glycoprotein_tree_esm2_l1.treefile") as f:
-    newick_6_esm2_l1 = f.read().strip()
+newick_6_esm2_cosine = _read_text(results_dir / "glycoprotein_workflow/phylogeny/glycoprotein_tree_esm2_cosine.treefile")
+newick_6_esm2_euclidean = _read_text(results_dir / "glycoprotein_workflow/phylogeny/glycoprotein_tree_esm2_euclidean.treefile")
+newick_6_esm2_l1 = _read_text(results_dir / "glycoprotein_workflow/phylogeny/glycoprotein_tree_esm2_l1.treefile")
 
-with open(results_dir / "phylogeny_500_results/viral_tree_esm2_cosine.treefile") as f:
-    newick_500_esm2_cosine = f.read().strip()
-with open(results_dir / "phylogeny_500_results/viral_tree_esm2_euclidean.treefile") as f:
-    newick_500_esm2_euclidean = f.read().strip()
-with open(results_dir / "phylogeny_500_results/viral_tree_esm2_l1.treefile") as f:
-    newick_500_esm2_l1 = f.read().strip()
+newick_500_esm2_cosine = _read_text(results_dir / "phylogeny_500_results/viral_tree_esm2_cosine.treefile")
+newick_500_esm2_euclidean = _read_text(results_dir / "phylogeny_500_results/viral_tree_esm2_euclidean.treefile")
+newick_500_esm2_l1 = _read_text(results_dir / "phylogeny_500_results/viral_tree_esm2_l1.treefile")
 
-with open(results_dir / "nipah_esm_workflow/phylogeny/nipah_tree_esm2_cosine.treefile") as f:
-    newick_1193_esm2_cosine = f.read().strip()
-with open(results_dir / "nipah_esm_workflow/phylogeny/nipah_tree_esm2_euclidean.treefile") as f:
-    newick_1193_esm2_euclidean = f.read().strip()
-with open(results_dir / "nipah_esm_workflow/phylogeny/nipah_tree_esm2_l1.treefile") as f:
-    newick_1193_esm2_l1 = f.read().strip()
+newick_1193_esm2_cosine = _read_text(results_dir / "nipah_esm_workflow/phylogeny/nipah_tree_esm2_cosine.treefile")
+newick_1193_esm2_euclidean = _read_text(results_dir / "nipah_esm_workflow/phylogeny/nipah_tree_esm2_euclidean.treefile")
+newick_1193_esm2_l1 = _read_text(results_dir / "nipah_esm_workflow/phylogeny/nipah_tree_esm2_l1.treefile")
 
 newick_6_esm2 = newick_6_esm2_cosine
 newick_500_esm2 = newick_500_esm2_cosine
 newick_1193_esm2 = newick_1193_esm2_cosine
 
 # Load Silhouette Profiles for all 3 modalities (ESM-2, 3Di, AA) across datasets
+def _iter_result_dirs(results_dir):
+    """List entries under results/, tolerating the directory being absent.
+
+    results/ holds generated output and is not tracked, so a fresh clone has no
+    such directory. Auto-discovery of custom workflows must then find nothing
+    rather than raising.
+    """
+    try:
+        return sorted(Path(results_dir).iterdir())
+    except (FileNotFoundError, NotADirectoryError, OSError):
+        return []
+
+
 def load_json_if_exists(p):
     return json.loads(p.read_text()) if p.exists() else None
 
@@ -136,8 +148,7 @@ sil_100 = sil_100_3di or sil_100_aa
 
 
 # 2. Build 1,193 Dataset Schema
-with open(results_dir / "nipah_esm_workflow/taxa_metadata.json") as f:
-    raw_1193 = json.load(f)
+raw_1193 = load_json_if_exists(results_dir / "nipah_esm_workflow/taxa_metadata.json") or {}
 
 meta_1193 = {}
 for tid, val in raw_1193.items():
@@ -193,8 +204,7 @@ columns_1193 = [
 ]
 
 # 3. Build 500 Dataset Schema
-with open(results_dir / "viro_500_glycoproteins/taxa_metadata.json") as f:
-    raw_500 = json.load(f)
+raw_500 = load_json_if_exists(results_dir / "viro_500_glycoproteins/taxa_metadata.json") or []
 
 FAMILY_COLORS = {
     "Rhabdoviridae": "#38bdf8", "Orthoherpesviridae": "#ec4899", "Phenuiviridae": "#10b981",
@@ -818,7 +828,7 @@ DATASETS = {
 # Auto-discover custom workflows in results/*
 known_core_datasets = {"1193", "500", "100", "6", "foldmason_500_alignments", "foldmason_alignments", "foldmason_glycoproteins", "viro_3d_structures", "viro_500_glycoproteins", "viro_glycoproteins", "phylogeny_500_results", "phylogeny_results", "nipah_esm_workflow", "glycoprotein_workflow", "rdrp_100_workflow"}
 custom_options_html = []
-for d in sorted(results_dir.iterdir()):
+for d in _iter_result_dirs(results_dir):
     if not d.is_dir() or d.name.startswith(".") or d.name in known_core_datasets:
         continue
     phy = d / "phylogeny"
@@ -888,6 +898,17 @@ for d in sorted(results_dir.iterdir()):
     if custom_npz:
         custom_umap = load_or_compute_umap(custom_npz[0], phy / f"{d.name}_umap_esm2.json")
 
+    # Load any silhouette profiles this workflow produced. These were previously
+    # hardcoded to None for auto-discovered datasets, so a custom run's scores could
+    # never reach the dashboard even when the JSON was sitting next to the tree.
+    def _first_silhouette(suffix):
+        matches = sorted(phy.glob(f"*_silhouette_{suffix}.json"))
+        return load_json_if_exists(matches[0]) if matches else None
+
+    custom_sil_esm2 = _first_silhouette("esm2")
+    custom_sil_3di = _first_silhouette("3di")
+    custom_sil_aa = _first_silhouette("aa")
+
     DATASETS[key] = {
         "title": title,
         "has_esm": bool(newick_esm2),
@@ -905,10 +926,10 @@ for d in sorted(results_dir.iterdir()):
         "defaultRadius": 3.6 if taxa_count <= 60 else (3.2 if taxa_count <= 150 else 2.8),
         "defaultZoom": {"x": 40, "y": 30, "k": 0.60},
         "congruence": {},
-        "silhouette": None,
-        "silhouette_esm2": None,
-        "silhouette_3di": None,
-        "silhouette_aa": None,
+        "silhouette": custom_sil_esm2 or custom_sil_3di or custom_sil_aa,
+        "silhouette_esm2": custom_sil_esm2,
+        "silhouette_3di": custom_sil_3di,
+        "silhouette_aa": custom_sil_aa,
         "esm2_umap": custom_umap
     }
     custom_options_html.append(f'              <option value="{key}">{title}</option>')
@@ -916,20 +937,6 @@ for d in sorted(results_dir.iterdir()):
 
 datasets_json = json.dumps(DATASETS)
 extra_scale_options = "\n".join(custom_options_html)
-
-
-def assemble_html(datasets_json: str, tool_version_str: str, extra_scale_options: str) -> str:
-    """Assemble interactive tree HTML from modular templates."""
-    tmpl_dir = Path(__file__).resolve().parent / "template"
-    index_html = (tmpl_dir / "index.html").read_text(encoding="utf-8")
-    viewer_css = (tmpl_dir / "viewer.css").read_text(encoding="utf-8")
-    viewer_js = (tmpl_dir / "viewer.js").read_text(encoding="utf-8")
-
-    js_filled = viewer_js.replace("/*__DATASETS_JSON__*/", datasets_json)
-    html_filled = index_html.replace("/*__INLINE_CSS__*/", viewer_css).replace("/*__INLINE_JS__*/", js_filled)
-    html_filled = html_filled.replace("<!-- TOOL_VERSION -->", tool_version_str)
-    html_filled = html_filled.replace("<!-- EXTRA_SCALE_OPTIONS -->", extra_scale_options)
-    return html_filled
 
 
 def build_interactive_tree(repo_dir: Path = None, results_dir: Path = None):
@@ -951,7 +958,7 @@ def build_interactive_tree(repo_dir: Path = None, results_dir: Path = None):
     ]
 
     # Auto-add targets for all discovered custom workflows
-    for d in sorted(results_dir.iterdir()):
+    for d in _iter_result_dirs(results_dir):
         if not d.is_dir() or d.name.startswith(".") or d.name in known_core_datasets:
             continue
         phy = d / "phylogeny"

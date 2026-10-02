@@ -5,9 +5,18 @@ channels:
   - defaults
 dependencies:
   - python=3.11
+  # Structural alignment, and 3Di extraction for the MAFFT path
   - foldmason>=4.dd3c235
+  # Maximum-likelihood trees for the per-cluster phylogenies
   - iqtree>=2.3.0
+  # Alternative aligner (--aligner mafft)
   - mafft>=7.500
+  # Clustering before alignment: sequence (mmseqs2) and structural (foldseek)
+  - mmseqs2>=17.0
+  - foldseek>=10.0
+  # Whole-set tree and IQ-TREE starting trees; VeryFastTree is preferred
+  - veryfasttree>=4.0
+  - fasttree>=2.1
   - biopython>=1.80
   - numpy>=1.24
   - scipy>=1.10
@@ -21,6 +30,8 @@ dependencies:
   - flake8>=6.0.0
   - pip
   - pip:
+      # For --embed. If the GPU is not used, the default torch build may target a
+      # newer CUDA than your driver; install.sh reports this and how to fix it.
       - torch>=2.0.0
       - transformers>=4.30.0
       - umap-learn>=0.5.4

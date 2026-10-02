@@ -31,6 +31,9 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
 ]
+# Python packages only. The external tools (foldmason, mafft, iqtree, mmseqs2,
+# foldseek, veryfasttree/fasttree) are not on PyPI - install them with conda from
+# environment.yml, or run ./install.sh.
 dependencies = [
     "numpy>=1.24.0",
     "scipy>=1.10.0",
@@ -38,16 +41,18 @@ dependencies = [
     "requests>=2.28.0",
     "tqdm>=4.65.0",
     "rich>=13.0.0",
-    "umap-learn>=0.5.4"
+    "umap-learn>=0.5.4",
+    # Core, not optional: Biopython repairs FastTree starting trees and builds NJ
+    # trees; scikit-learn scores cluster partitions by silhouette.
+    "biopython>=1.80",
+    "scikit-learn>=1.2.0"
 ]
 
 [project.optional-dependencies]
+# Needed only for --embed (ESM-2 / ESM-C protein language model embeddings).
 ml = [
     "torch>=2.0.0",
-    "transformers>=4.30.0",
-    "scikit-learn>=1.2.0",
-    "biopython>=1.80",
-    "umap-learn>=0.5.4"
+    "transformers>=4.30.0"
 ]
 dev = [
     "pytest>=7.4.0",

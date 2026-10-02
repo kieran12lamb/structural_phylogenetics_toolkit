@@ -42,6 +42,14 @@ jobs:
           iqtree --version || echo "IQ-TREE available"
           echo "MAFFT version:"
           mafft --version || echo "MAFFT available"
+          # Clustering and fast-tree tools. The starting-tree and FastTree-matrix
+          # integration tests run against these; they are skipped if absent.
+          echo "MMseqs2 version:"
+          mmseqs version || echo "MMseqs2 not found"
+          echo "Foldseek version:"
+          foldseek version || echo "Foldseek not found"
+          echo "VeryFastTree / FastTree:"
+          VeryFastTree -help 2>&1 | grep -m1 -E "VeryFastTree [0-9]" || FastTree -help 2>&1 | grep -m1 -E "FastTree [0-9]" || echo "FastTree not found"
 
       - name: Run Linting (Flake8)
         run: |

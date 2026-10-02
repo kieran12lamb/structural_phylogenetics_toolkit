@@ -343,6 +343,73 @@ def count_fasta_seqs(aln_path: str) -> int:
         return sum(1 for line in f if line.startswith(">"))
 
 
+def _thread_count(threads):
+    """A positive integer thread cap, or None when unset or AUTO."""
+    try:
+        n = int(threads)
+    except (TypeError, ValueError):
+        return None
+    return n if n > 0 else None
+
+
+def _foldmason_threads(threads):
+    # FoldMason, like Foldseek and MMseqs2, uses every core unless told otherwise.
+    n = _thread_count(threads)
+    return ["--threads", str(n)] if n else []
+
+
+def _mafft_threads(threads):
+    # MAFFT is single-threaded unless told otherwise.
+    n = _thread_count(threads)
+    return ["--thread", str(n)] if n else []
+
+
+def extract_unaligned_sequences(
+    pdb_files,
+    output_dir: str,
+    foldmason_bin: str = None,
+    threads: int = None,
+):
+    """Extract raw per-structure amino-acid and 3Di sequences via FoldMason.
+
+    ``createdb`` reads the structures and ``convert2fasta`` dumps them; neither
+    aligns anything, so the output is genuinely unaligned - one gap-free sequence
+    per structure, of its own length. FoldMason is used here purely as a 3Di
+    extractor: 3Di is derived from backbone geometry, so it cannot be obtained from
+    a FASTA file, which is why this step is needed even when MAFFT does the aligning.
+
+    Returns ``(unaligned_aa_path, unaligned_3di_path)``.
+    """
+    if not foldmason_bin:
+        foldmason_bin = find_foldmason_bin()
+    os.makedirs(output_dir, exist_ok=True)
+
+    if isinstance(pdb_files, str):
+        collected = []
+        for ext in ("*.pdb", "*.cif", "*.mmcif"):
+            collected.extend(glob.glob(os.path.join(pdb_files, ext)))
+        pdb_files = sorted(set(collected))
+
+    sdb_prefix = os.path.join(output_dir, "sDB")
+    subprocess.run([foldmason_bin, "createdb", *pdb_files, sdb_prefix, *_foldmason_threads(threads)], check=True)
+
+    # convert2fasta needs a header database for the 3Di (``_ss``) side too.
+    for ext in ("", ".index", ".dbtype"):
+        src = f"{sdb_prefix}_h{ext}"
+        dst = f"{sdb_prefix}_ss_h{ext}"
+        if os.path.isfile(src) and not os.path.isfile(dst):
+            try:
+                shutil.copyfile(src, dst)
+            except Exception:
+                pass
+
+    unaligned_aa = os.path.join(output_dir, "unaligned_aa.fa")
+    unaligned_3di = os.path.join(output_dir, "unaligned_3di.fa")
+    subprocess.run([foldmason_bin, "convert2fasta", sdb_prefix, unaligned_aa], check=True)
+    subprocess.run([foldmason_bin, "convert2fasta", f"{sdb_prefix}_ss", unaligned_3di], check=True)
+    return unaligned_aa, unaligned_3di
+
+
 def align_structures(
     pdb_dir: str,
     output_dir: str,
@@ -354,8 +421,16 @@ def align_structures(
     min_coverage: float = None,
     multi_alignment: bool = False,
     filter_coverage: bool = False,
+    mafft_leavegappyregion: bool = False,
+    threads: int = None,
 ):
-    """Run FoldMason or MAFFT multiple sequence/structure alignment on PDB files."""
+    """Run FoldMason or MAFFT multiple sequence/structure alignment on PDB files.
+
+    ``mafft_leavegappyregion`` passes ``--leavegappyregion`` to the MAFFT amino-acid
+    run, reverting MAFFT's post-7.110 gap scoring, which inserts extra gaps into
+    gap-rich regions. On the Nipah binder clusters it recovered roughly half of the
+    extra AA gaps MAFFT makes relative to FoldMason. The 3Di run is unaffected.
+    """
     if not foldmason_bin:
         foldmason_bin = find_foldmason_bin()
 
@@ -379,26 +454,8 @@ def align_structures(
         actual_mat3di = ensure_3di_matrix(mafft_matrix)
 
         print(f"[MAFFT] Extracting unaligned 3Di and AA sequences for {len(pdb_files)} structures via FoldMason createdb...")
-        sdb_prefix = os.path.join(tmp_folder, "sDB")
-        cmd_createdb = [foldmason_bin, "createdb", *pdb_files, sdb_prefix]
-        subprocess.run(cmd_createdb, check=True)
-
-        # Prepare header database for sDB_ss conversion
-        for ext in ("", ".index", ".dbtype"):
-            src = f"{sdb_prefix}_h{ext}"
-            dst = f"{sdb_prefix}_ss_h{ext}"
-            if os.path.isfile(src) and not os.path.isfile(dst):
-                try:
-                    shutil.copyfile(src, dst)
-                except Exception:
-                    pass
-
-        unaligned_aa = os.path.join(tmp_folder, "unaligned_aa.fa")
-        unaligned_3di = os.path.join(tmp_folder, "unaligned_3di.fa")
-
-        # Convert to FASTA
-        subprocess.run([foldmason_bin, "convert2fasta", sdb_prefix, unaligned_aa], check=True)
-        subprocess.run([foldmason_bin, "convert2fasta", f"{sdb_prefix}_ss", unaligned_3di], check=True)
+        unaligned_aa, unaligned_3di = extract_unaligned_sequences(
+            pdb_files, tmp_folder, foldmason_bin=foldmason_bin, threads=threads)
 
         # Output alignment paths: explicitly save MAFFT alignment files and also maintain foldmason names for downstream compatibility
         mafft_3di = os.path.join(output_dir, "mafft.fasta_3di.fa")
@@ -408,11 +465,15 @@ def align_structures(
 
         print(f"[MAFFT] Aligning 3Di structural sequences with substitution matrix '{actual_mat3di}'...")
         with open(mafft_3di, "w") as f_out:
-            subprocess.run([actual_mafft, "--aamatrix", actual_mat3di, "--auto", unaligned_3di], stdout=f_out, check=True)
+            subprocess.run([actual_mafft, "--aamatrix", actual_mat3di, "--auto", *_mafft_threads(threads),
+                            unaligned_3di], stdout=f_out, check=True)
 
         print(f"[MAFFT] Aligning amino acid sequences...")
         with open(mafft_aa, "w") as f_out:
-            subprocess.run([actual_mafft, "--auto", unaligned_aa], stdout=f_out, check=True)
+            aa_cmd = [actual_mafft, "--auto", *_mafft_threads(threads)]
+            if mafft_leavegappyregion:
+                aa_cmd.append("--leavegappyregion")
+            subprocess.run([*aa_cmd, unaligned_aa], stdout=f_out, check=True)
 
         # Mirror alignments to foldmason.fasta_*.fa for full backward compatibility with downstream pipeline tools
         shutil.copyfile(mafft_3di, aln_3di)
@@ -428,7 +489,8 @@ def align_structures(
             report_mode = 0 if len(pdb_files) > 40 else 1
 
         out_prefix = os.path.join(output_dir, "foldmason.fasta")
-        cmd = [foldmason_bin, "easy-msa", *pdb_files, out_prefix, tmp_folder, "--report-mode", str(report_mode)]
+        cmd = [foldmason_bin, "easy-msa", *pdb_files, out_prefix, tmp_folder, "--report-mode", str(report_mode),
+               *_foldmason_threads(threads)]
 
         print(f"[FoldMason] Aligning {len(pdb_files)} structures from '{pdb_dir}'...")
         print("  " + " ".join(cmd[:10]) + (f" ... [{len(pdb_files)-10} more files]" if len(pdb_files) > 10 else ""))

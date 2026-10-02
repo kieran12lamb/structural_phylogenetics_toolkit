@@ -52,13 +52,25 @@ reproduced_results/
 *.tmp
 *.log
 
-# Large PDB structure files (only keep 6 benchmark example structures)
+# Large PDB/CIF structure files. The 6 benchmark structures under tests/fixtures are
+# the only tracked exception - they are the fixture set for tests/test_alignment.py.
 *.pdb
 *.cif
-!results/glycoprotein_workflow/structures/*.pdb
+!tests/fixtures/structures/*.pdb
 
-# Results folders: only the 6 benchmark demo folder (glycoprotein_workflow) is tracked
-results/*/
-!results/glycoprotein_workflow/
-!results/glycoprotein_workflow/**
+# Pipeline results are generated output and are never tracked.
+results/
 
+# Generated visualisation bundles and reports. These are rebuilt by
+# `build-tree-view` / `build-alignments` and must not be committed.
+interactive_tree.html
+alignments_data.js
+ca_*structures.js
+matrices/ca_*.json
+
+# Captured stdout from nohup'd pipeline runs
+nohup.out
+
+
+# Upper-case matrix aliases generated for IQ-TREE -mset (see matrices.py)
+MATRICES/

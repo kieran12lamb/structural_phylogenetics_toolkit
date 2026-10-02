@@ -293,7 +293,12 @@ def build_hierarchical_tree(
 
             out_buf = io.StringIO()
             Phylo.write(tree, out_buf, "newick")
-            return out_buf.getvalue().strip()
+            # Return the same 3-tuple shape as the SciPy branch below. Neighbour-joining
+            # produces no linkage matrix, so Z is None - but the caller still needs the
+            # distances, and returning a bare string here previously made the caller's
+            # `isinstance(tree_res, tuple)` check fail, silently disabling the silhouette
+            # profile with no warning at all.
+            return out_buf.getvalue().strip(), None, condensed_dist
         except Exception as e:
             print(f"[PLM Warning] NJ tree construction fallback to UPGMA: {e}")
 
@@ -381,11 +386,19 @@ def compute_silhouette_profile(
         is_peak = is_left and is_right and (s_val > 0.35 or idx == 0)
 
         sizes = [int(np.sum(clusts == c)) for c in np.unique(clusts)]
+        # Cluster membership, not just the sizes: the viewer needs the taxon
+        # lists to build a clade roster and scope the tree to a cut.
+        members: Dict[str, List[str]] = {}
+        for c in np.unique(clusts):
+            members[str(int(c))] = [
+                taxa_names[i] for i in np.flatnonzero(clusts == c)
+            ]
         entry = {
             "k": int(k_val),
             "score": round(float(s_val), 4),
             "is_peak": bool(is_peak),
-            "cluster_sizes": sorted(sizes, reverse=True)
+            "cluster_sizes": sorted(sizes, reverse=True),
+            "clusters": members
         }
         profile.append(entry)
         if is_peak:
@@ -498,6 +511,13 @@ def run_embedding_pipeline(
             print(f"[PLM] Silhouette score profile saved to: '{sil_path}' (Optimal k={sil_info['best_k']} with S={sil_info['best_score']})")
         except Exception as e:
             print(f"[PLM Warning] Could not compute silhouette profile: {e}")
+    elif compute_silhouette and Z is None:
+        # Do not fail silently. The silhouette profile is computed over successive cuts
+        # of a linkage matrix; neighbour-joining does not produce one, so there is
+        # nothing to cut. Say so, and say what to run instead.
+        print(f"[PLM] [!] Notice: silhouette profile SKIPPED - clustering '{clustering}' produces no "
+              "linkage matrix to cut.")
+        print("[PLM]     Use --embed-clustering upgma|average|complete|ward to get a silhouette profile.")
 
     # Compute 2D UMAP projection coordinates
     umap_coords = None
