@@ -416,9 +416,7 @@ class TestInteractiveTree(unittest.TestCase):
         self.assertIn('SH-aLRT Support:', content)
 
         # Verify vertical branch gradient between horizontal branches
-        self.assertIn('function applyVerticalBranchGradient(vLine, node, minY, maxY, defs)', content)
-        self.assertIn('gradientUnits', content)
-        self.assertIn('userSpaceOnUse', content)
+        self.assertIn('function applyVerticalBranchGradient(vLine, node)', content)
         self.assertIn('applyVerticalBranchGradient(vLine', content)
 
 
@@ -464,7 +462,8 @@ class TestInteractiveTree(unittest.TestCase):
         content = self.content
 
         # 1. Alignment Drawer UI controls for coverage threshold & partitions
-        self.assertIn('id="selectAlignmentPartition"', content)
+        self.assertIn('id="alignPartitionRoster"', content)
+        self.assertIn('id="msaPartitionChip"', content)
         self.assertIn('id="msaCoverageThreshold"', content)
         self.assertIn('id="btnFilterCoverage"', content)
 
@@ -516,6 +515,35 @@ class TestInteractiveTree(unittest.TestCase):
         self.assertIn('settings.layout === "umap"', content)
         self.assertIn("UMAP RADAR", content)
         self.assertIn("umapPointCoords", content)
+
+    def test_tree_rotation_controls_and_subtree_flip(self):
+        """Verify tree view rotation (HUD, sidebar, and presets) and subtree clade branch flip."""
+        content = assemble_html(json.dumps(self.DATASETS_FIXTURE), "v1.0.0 (abc1234)", "")
+
+        # 1. Floating HUD Rotation Toolbar & Popover
+        self.assertIn('id="hudRotationGroup"', content)
+        self.assertIn('id="hudRotationVal"', content)
+        self.assertIn('id="hudRotationSlider"', content)
+        self.assertIn('id="hudRotationPopover"', content)
+        self.assertIn('toggleRotationPopover()', content)
+        self.assertIn('stepTreeRotation(-90)', content)
+        self.assertIn('stepTreeRotation(90)', content)
+
+        # 2. Sidebar Rotation & Orientation in Rectangular, Radial & Unrooted cards
+        self.assertIn('id="rectRotationSlider"', content)
+        self.assertIn('id="rectRotationVal"', content)
+        self.assertIn('id="treeRotationSlider"', content)
+        self.assertIn('id="unrootedRotationSlider"', content)
+
+        # 3. Subtree / Clade Node Rotation
+        self.assertIn('id="btnTooltipRotateSubtree"', content)
+        self.assertIn('function rotateSubtreeNode(', content)
+        self.assertIn('function triggerHoverRotateSubtree()', content)
+        self.assertIn('function rotateCladeByCutId(', content)
+
+        # 4. Cartesian canvas rotation group & counter-rotation
+        self.assertIn('cartesianRotationGroup', content)
+        self.assertIn('rotateSubtreeNode(node)', content)
 
 
 if __name__ == "__main__":

@@ -25,6 +25,7 @@ from viral_phylo.clustering import (
     full_set_alignment_is_usable,
     parse_fasta as cluster_parse_fasta,
     partition_structures_by_similarity,
+    qc_structure_dir,
 )
 from viral_phylo.manifest import RunManifest, write_alignment_info
 from viral_phylo.structures import extract_ca_dict, write_ca_bundle
@@ -57,7 +58,10 @@ def pipeline_preflight(args, manifest) -> None:
             needed["foldseek"] = "--cluster-mode structural"
         elif mode == "sequence":
             needed["mmseqs"] = "--cluster-mode sequence"
-    methods = {getattr(args, "master_method", "fasttree"), args.method}
+    _mm = getattr(args, "master_method", "auto")
+    # 'auto' is resolved only once the alignment has been judged, so both engines
+    # have to be present up front.
+    methods = ({"fasttree", "iqtree"} if _mm == "auto" else {_mm}) | {args.method}
     if "iqtree" in methods:
         needed["iqtree"] = "tree method iqtree"
     for tool, why in needed.items():
@@ -187,6 +191,39 @@ def build_cli_parser() -> argparse.ArgumentParser:
     p_report.add_argument("--title", default=None, help="Report title (default: tree file name)")
 
     # Subcommand: pipeline (all-in-one)
+    p_search = subparsers.add_parser(
+        "search", help="Build a structure cohort from a query protein's Foldseek neighbours.")
+    p_search.add_argument("-q", "--query", required=True,
+                          help="Structure file, UniProt accession, or NCBI protein accession "
+                               "(e.g. YP_009724396.1). A bare sequence is not accepted: the hosted "
+                               "search needs a structure.")
+    p_search.add_argument("-o", "--output-dir", default="search_cohort",
+                          help="Directory for the cohort and its metadata (default: search_cohort).")
+    p_search.add_argument("-d", "--database", action="append", default=None,
+                          help="Database to search; repeat for several. Default: bfvd_v3. "
+                               "Use --list-databases to see what the server offers.")
+    p_search.add_argument("--max-hits", type=int, default=500,
+                          help="Ceiling on cohort size (default: 500). Not a target: only hits "
+                               "passing the quality gate are used, however few that leaves.")
+    p_search.add_argument("--max-evalue", type=float, default=1e-3,
+                          help="Drop hits above this E-value (default: 1e-3). Every database returns "
+                               "rows down to its own floor, and those tails are noise.")
+    p_search.add_argument("--min-coverage", type=float, default=0.0,
+                          help="Minimum aligned fraction of the query (default: 0).")
+    p_search.add_argument("--min-aln-length", type=int, default=0,
+                          help="Minimum alignment length in residues (default: 0).")
+    p_search.add_argument("--exclude-self", action="store_true",
+                          help="Drop hits at >=99.9%% identity to the query.")
+    p_search.add_argument("--no-taxonomy", action="store_true",
+                          help="Skip lineage and host lookup from UniProt's taxonomy endpoint.")
+    p_search.add_argument("--no-lddt", action="store_true",
+                          help="Skip per-residue LDDT against the query.")
+    p_search.add_argument("--list-databases", action="store_true",
+                          help="Print the databases the server offers and exit.")
+    p_search.add_argument("-t", "--threads", default="8", help="Threads for LDDT (default: 8).")
+    p_search.add_argument("--workers", type=int, default=12,
+                          help="Concurrent structure downloads (default: 12).")
+
     p_pipe = subparsers.add_parser("pipeline", help="Run full pipeline: fetch/local -> align -> tree (+ optional PLM embed).")
     p_pipe.add_argument("-i", "--input-folder", default=None, help="Local directory of PDB structures (skips Viro3D fetch if specified)")
     p_pipe.add_argument("--source", choices=["viro3d", "alphafold", "afdb"], default="viro3d", help="Structure repository: 'viro3d' or 'alphafold' (default: viro3d)")
@@ -274,11 +311,14 @@ def build_cli_parser() -> argparse.ArgumentParser:
     p_pipe.add_argument("--guide-tree-min-taxa", type=int, default=80,
                         help="Smallest alignment given a FastTree starting tree with --guide-trees (default: 80, "
                              "the size at which IQ-TREE switches to a fixed model, so no model selection is affected).")
-    p_pipe.add_argument("--master-method", choices=["fasttree", "iqtree", "foldmason"], default="fasttree",
-                        help="Tree method for the whole-set tree (default: fasttree). IQ-TREE on a large, "
-                             "gap-rich whole-set alignment can take days - a 1,193-taxon run was ~78 hours - "
-                             "for a tree that is an overview rather than the analysis. FastTree gives the "
-                             "overview in about a minute and uses the --matrix 3Di model via -trans.")
+    p_pipe.add_argument("--master-method", choices=["auto", "fasttree", "iqtree", "foldmason"], default="auto",
+                        help="Tree method for the whole-set tree (default: auto). 'auto' picks IQ-TREE when the "
+                             "whole-set alignment passes the usability gate and FastTree when it does not, so "
+                             "real bootstrap support is only paid for on an alignment worth inferring from. "
+                             "IQ-TREE on a large, gap-rich whole-set alignment can take days - a 1,193-taxon run "
+                             "was ~78 hours - for a tree that is an overview rather than the analysis, while "
+                             "FastTree gives that overview in about a minute and uses the --matrix 3Di model via "
+                             "-trans. Note FastTree's SH-like support is a local approximation, not a bootstrap.")
     p_pipe.add_argument("--matrix", choices=["alphafold", "af", "esmfold", "llm", "both", "auto"], default="both", help="3Di matrix (default: both)")
     p_pipe.add_argument("--rate-heterogeneity", default="auto", help="Rate heterogeneity model (default: auto)")
     p_pipe.add_argument("-b", "--bootstrap", type=int, default=1000, help="Ultrafast bootstrap replicates (default: 1000)")
@@ -345,6 +385,21 @@ def main():
     parser = build_cli_parser()
     args = parser.parse_args()
     thread_cap = apply_thread_cap(getattr(args, "threads", None))
+
+    # IQ-TREE's ultrafast bootstrap requires at least 1000 replicates. Below that it
+    # exits with "#replicates must be >= 1000", and because the whole-set tree may
+    # go to FastTree (which has no such floor) the failure can surface minutes in,
+    # at the first per-cluster tree, long after alignment and clustering.
+    _bs = getattr(args, "bootstrap", None)
+    if isinstance(_bs, int) and 0 < _bs < 1000:
+        print(f"[!] --bootstrap {_bs} is not valid: IQ-TREE's ultrafast bootstrap needs at least "
+              "1000 replicates. Use --bootstrap 1000 (the minimum), or 0 to skip bootstrapping.")
+        return 2
+    _alrt = getattr(args, "alrt", None)
+    if isinstance(_alrt, int) and 0 < _alrt < 1000:
+        print(f"[!] --alrt {_alrt} is not valid: SH-aLRT needs at least 1000 replicates. "
+              "Use --alrt 1000, or 0 to skip it.")
+        return 2
 
     if args.subcommand == "fetch":
         source = getattr(args, "source", "viro3d")
@@ -425,6 +480,136 @@ def main():
         sub_env = dict(os.environ)
         sub_env["KMP_DUPLICATE_LIB_OK"] = "TRUE"
         subprocess.run(cmd, check=True, env=sub_env)
+    elif args.subcommand == "search":
+        from viral_phylo import search as fs
+
+        if args.list_databases:
+            for db in fs.list_databases():
+                tax = "taxonomy" if db.get("taxonomy") else ""
+                print(f"  {db.get('path'):<28} {db.get('name'):<26} {db.get('version'):<12} {tax}")
+            return 0
+
+        out_base = args.output_dir
+        work = os.path.join(out_base, "_search")
+        os.makedirs(work, exist_ok=True)
+        dbs = args.database or list(fs.DEFAULT_DATABASES)
+
+        q = fs.resolve_query(args.query, work)
+        if q.get("plddt") is not None:
+            print(f"[Search] query {q['id']}: {q.get('description') or ''} "
+                  f"(global pLDDT {q['plddt']:.1f})")
+            if q["plddt"] < 70:
+                # Low-confidence queries are supported on purpose; the cohort just
+                # inherits that uncertainty, so it is recorded rather than blocked.
+                print("[Search] [!] Notice: the query model is low confidence. The cohort it finds "
+                      "inherits that uncertainty; this is recorded, not blocked.")
+
+        print(f"[Search] searching {len(dbs)} database(s): {', '.join(dbs)}")
+        ticket = fs.submit_search(q["path"], dbs)
+        if fs.wait_for_ticket(ticket) != "COMPLETE":
+            raise RuntimeError(f"Foldseek search failed (ticket {ticket}).")
+        blocks = fs.fetch_results(ticket)
+
+        sel = fs.pool_and_filter(
+            blocks, max_hits=args.max_hits, max_evalue=args.max_evalue,
+            min_alnlen=args.min_aln_length, min_coverage=args.min_coverage,
+            include_self=not args.exclude_self)
+        for db, st in sorted(sel["per_db"].items()):
+            print(f"[Search]   {db:<18} returned {st['returned']:>5}  passed {st['passed']:>5}")
+        print(f"[Search] {sel['pooled']} pooled -> {sel['unique']} unique -> {sel['selected']} selected")
+        if sel["short_of_request"]:
+            print(f"[Search] Fewer hits passed the gate than the {args.max_hits} requested. Using all "
+                  f"{sel['selected']} that passed; the shortfall is the query's, not an error.")
+        if not sel["hits"]:
+            print("[Search] No hits passed the quality gate; nothing to build a cohort from.")
+            return 1
+
+        mat = fs.materialise_hits(sel["hits"], os.path.join(out_base, "structures"),
+                                  cache_dir=work, workers=args.workers)
+        print(f"[Search] structures: {mat['written']} written {mat['by_source']}, "
+              f"{mat['with_confidence']} with native confidence, {len(mat['failed'])} failed")
+
+        if not args.no_taxonomy:
+            try:
+                taxa_ids = [r.get("tax_id") for r in mat["records"].values()]
+                tax = fs.fetch_taxonomy(taxa_ids)
+                fs.enrich_records(mat["records"], tax)
+                n_lin = sum(1 for r in mat["records"].values() if r.get("lineage"))
+                n_host = sum(1 for r in mat["records"].values() if r.get("host_primary"))
+                print(f"[Search] taxonomy: {n_lin}/{len(mat['records'])} with lineage, "
+                      f"{n_host} with an annotated host")
+                if n_host < n_lin:
+                    print("[Search]   hosts are curated annotations and are sparse for "
+                          "unreviewed viral taxa; the rest are left blank rather than guessed.")
+            except Exception as exc:
+                print(f"[Search] [!] Notice: taxonomy enrichment failed "
+                      f"({type(exc).__name__}: {exc}); names from the search are kept.")
+
+        lddt = {}
+        if not args.no_lddt and mat["written"]:
+            try:
+                lddt = fs.per_residue_lddt(q["path"], mat["dir"], os.path.join(work, "lddt"),
+                                           threads=int(args.threads) if str(args.threads).isdigit() else 8)
+                print(f"[Search] per-residue LDDT against the query for {len(lddt)} member(s)")
+            except Exception as exc:
+                print(f"[Search] [!] Notice: LDDT could not be computed ({type(exc).__name__}: {exc}).")
+
+        for acc, rec in mat["records"].items():
+            if acc in lddt:
+                rec.update(lddt_to_query=lddt[acc]["lddt_to_query"],
+                           tm_to_query=lddt[acc]["tm_to_query"],
+                           lddt_per_residue=lddt[acc]["lddt_per_residue"],
+                           aligned_span=lddt[acc]["aligned_span"])
+
+        # Sidecar beside the structures: the pipeline's C-alpha extraction reads the
+        # B-factor column but cannot know which scale it is on, nor that an LDDT
+        # track exists. Dropping it next to the cohort keeps the hand-off to a
+        # plain directory while carrying what the viewer needs to colour safely.
+        sidecar = {}
+        for acc, rec in mat["records"].items():
+            if rec.get("error"):
+                continue
+            entry = {
+                "confidence_kind": rec.get("confidence_kind", "none"),
+                "structure_kind": rec.get("structure_kind"),
+                "resolution": rec.get("resolution"),
+                "lddt_to_query": rec.get("lddt_to_query"),
+                "lddt_per_residue": rec.get("lddt_per_residue"),
+                "source": rec.get("source"),
+                "evalue": rec.get("evalue"),
+            }
+            # Everything the metadata stage should surface as a column. Carried in
+            # the sidecar rather than re-fetched, so the pipeline needs no network.
+            for fld in ("tax_id", "tax_name", "tax_rank", "lineage", "hosts",
+                        "host_primary", "host_common", "host_count", "db",
+                        "seq_id", "coverage", "aln_length", "db_len",
+                        "tm_to_query", "confidence_median"):
+                if rec.get(fld) is not None:
+                    entry[fld] = rec[fld]
+            for fld in rec:
+                if fld.startswith("tax_") and rec.get(fld) is not None:
+                    entry[fld] = rec[fld]
+            sidecar[acc] = entry
+        sidecar_path = os.path.join(mat["dir"], "search_confidence.json")
+        with open(sidecar_path, "w", encoding="utf-8") as fh:
+            json.dump({"query": q["id"], "entries": sidecar}, fh)
+        print(f"[Search] confidence sidecar: '{sidecar_path}'")
+
+        summary_path = os.path.join(out_base, "search_summary.json")
+        with open(summary_path, "w", encoding="utf-8") as fh:
+            json.dump({
+                "query": {k: v for k, v in q.items() if k != "path"},
+                "query_structure": q["path"],
+                "databases": dbs,
+                "ticket": ticket,
+                "selection": {k: v for k, v in sel.items() if k != "hits"},
+                "structures": {k: {kk: vv for kk, vv in r.items() if kk != "confidence"}
+                               for k, r in mat["records"].items()},
+            }, fh, indent=2)
+        print(f"[Search] summary: '{summary_path}'")
+        print(f"[Search] cohort ready: '{mat['dir']}'")
+        print(f"[Search] next: viral-phylo pipeline --input-folder {mat['dir']} --output-dir <out> ...")
+
     elif args.subcommand == "report":
         out = build_tree_report(args.tree, metadata_path=args.metadata, output_path=args.output, title=args.title)
         print(f"[Report] Interactive tree report written to: file://{out.resolve()}")
@@ -502,11 +687,37 @@ def main():
         cluster_mode = getattr(args, "cluster_mode", "structural")
         use_similarity = multi_aln and cluster_mode != "coverage"
 
+        # Sequence QC, before anything is aligned. It used to run inside clustering,
+        # which left the whole-set alignment and every master tree built from it
+        # carrying sequences QC had rejected - the manifest said 1135 retained while
+        # the trees held 1193 tips. One filtered set now feeds both paths.
+        _qc_dir = pdb_dir
+        _qc_info = None
+        try:
+            _qc_info = qc_structure_dir(
+                pdb_dir,
+                os.path.join(aln_dir, "_qc"),
+                min_length=getattr(args, "min_seq_length", 50),
+                min_length_frac=getattr(args, "min_length_frac", 0.4),
+                threads=int(args.threads) if str(args.threads).isdigit() else 0,
+                manifest=manifest,
+            )
+            _qc_dir = _qc_info["dir"]
+            if _qc_info["excluded"]:
+                print(f"[Pipeline] QC removed {len(_qc_info['excluded'])} of {_qc_info['input_count']} "
+                      f"structures before alignment; {len(_qc_info['kept'])} continue.")
+        except Exception as exc:
+            # QC is a quality step, not a gate: if it cannot run, align everything
+            # rather than aborting, and say so.
+            print(f"[Pipeline] [!] Notice: sequence QC could not run ({type(exc).__name__}: {exc}); "
+                  "aligning the unfiltered set.")
+            manifest.add_warning(f"sequence QC skipped: {type(exc).__name__}: {exc}")
+
         # Always build the whole-set alignment first: the master tree needs it, and it
         # is what the full-set gate below is judged on. Under similarity clustering it
         # is a diagnostic only - it no longer drives the partitioning.
         aln_3di = align_structures(
-            pdb_dir,
+            _qc_dir,
             aln_dir,
             aligner=args.aligner,
             mafft_bin=getattr(args, "mafft_bin", None),
@@ -613,7 +824,7 @@ def main():
                 _cand = os.path.join(phy_dir, f"{prefix}_embeddings_esm2.npz")
                 _emb_npz = _cand if os.path.isfile(_cand) else None
             multi_summary = partition_structures_by_similarity(
-                pdb_dir, aln_dir,
+                _qc_dir, aln_dir,
                 mode=cluster_mode,
                 evalue=getattr(args, "cluster_evalue", 1.0),
                 coverage=getattr(args, "cluster_coverage", 0.5),
@@ -638,6 +849,7 @@ def main():
                 mafft_matrix=getattr(args, "mafft_matrix", "matrices/mat3di.out"),
                 threads=int(args.threads) if str(args.threads).isdigit() else 0,
                 manifest=manifest,
+                qc_already_applied=_qc_info is not None,
             )
             shutil.copy2(os.path.join(aln_dir, "multi_alignment_summary.json"),
                          os.path.join(out_base, "multi_alignment_summary.json"))
@@ -697,8 +909,25 @@ def main():
 
         # 3. Tree
 
-        _master_method = getattr(args, "master_method", "fasttree")
+        _master_method = getattr(args, "master_method", "auto")
+        if _master_method == "auto":
+            # Spend IQ-TREE's cost only where the alignment can support inference.
+            # On an alignment the gate rejected, a bootstrap would put a precise
+            # number on a topology that is not one.
+            _master_method = "iqtree" if full_set_usable else "fasttree"
+            print(f"[Pipeline] --master-method auto -> {_master_method} "
+                  f"(whole-set alignment {'passed' if full_set_usable else 'did not pass'} the usability gate)")
+            if _master_method == "iqtree":
+                print("[Pipeline] IQ-TREE on the whole set is slow; pass --master-method fasttree to skip it.")
         _master_error = None
+        # The full-set gate has already judged this alignment. Building a tree on an
+        # alignment it rejected is still allowed - the tree is a useful layout, and
+        # per-cluster trees carry the inference - but it must not be presented as if
+        # it were inferential, so say so here and mark it everywhere it is recorded.
+        if full_set_usable is False:
+            print(f"[Pipeline] [!] Notice: building whole-set tree(s) on an alignment flagged NOT usable "
+                  f"({full_set_reason}). Their topology is a layout, not an inference; "
+                  "the per-cluster trees are the analysis.")
         try:
             build_tree(
                 alignment_file=aln_3di,
@@ -727,11 +956,23 @@ def main():
         _master_info = [json.load(open(t + ".info.json")) for t in _master_trees if os.path.isfile(t + ".info.json")]
         manifest.record_stage(
             "tree-master", "failed" if _master_error else ("ok" if _master_trees else "skipped"),
-            reason=_master_error or (None if _master_trees else f"{_master_method} produced no .treefile"),
+            reason=_master_error or (
+                ("built on an alignment flagged unusable: " + str(full_set_reason))
+                if (_master_trees and full_set_usable is False)
+                else (None if _master_trees else f"{_master_method} produced no .treefile")),
             duration_s=time.time() - _t_stage, outputs=_master_trees,
             command="; ".join(i["command"] for i in _master_info) or _master_method,
         )
         if _master_info:
+            if full_set_usable is False:
+                for _mi in _master_info:
+                    _mi["alignment_usable"] = False
+                    _mi["alignment_reason"] = full_set_reason
+                    _mi["interpretation"] = ("Built on a whole-set alignment that failed the usability "
+                                             "gate; treat the topology as a layout, not as inference.")
+            elif full_set_usable is True:
+                for _mi in _master_info:
+                    _mi["alignment_usable"] = True
             manifest.data.setdefault("trees", {})["master"] = _master_info
         _t_stage = time.time()
 
@@ -839,7 +1080,27 @@ def main():
             cand_meta = os.path.join(pdb_dir, "taxa_metadata.json")
             if os.path.isfile(cand_meta):
                 meta_src = cand_meta
-        meta_res = parse_metadata(meta_src, structure_dir=pdb_dir)
+        # A cohort built by `viral-phylo search` leaves taxonomy, host and
+        # similarity annotation beside its structures. Fold it in here so those
+        # become first-class columns with colour maps, rather than an afterthought.
+        _extra = None
+        _side = os.path.join(pdb_dir, "search_confidence.json")
+        if os.path.isfile(_side):
+            try:
+                with open(_side, "r", encoding="utf-8") as fh:
+                    _sc = json.load(fh)
+                _extra = {}
+                for _acc, _ent in (_sc.get("entries") or {}).items():
+                    _extra[_acc] = {k: v for k, v in _ent.items()
+                                    if k != "lddt_per_residue" and v is not None}
+                print(f"[Pipeline] Metadata enrichment from the search cohort: "
+                      f"{len(_extra)} taxa.")
+            except (OSError, ValueError) as exc:
+                print(f"[Pipeline] [!] Notice: search sidecar unreadable ({exc}); "
+                      "metadata will be built without it.")
+                _extra = None
+
+        meta_res = parse_metadata(meta_src, structure_dir=pdb_dir, extra_fields=_extra)
         meta_out_path = os.path.join(out_base, "taxa_metadata.json")
         with open(meta_out_path, "w", encoding="utf-8") as f:
             json.dump(meta_res, f, indent=2)
@@ -862,20 +1123,13 @@ def main():
             # silently yielded no backbone at all.
             ca_dict = extract_ca_dict(pdb_dir)
             if ca_dict:
-                write_ca_bundle(ca_dict, os.path.join(out_base, "ca_structures.js"))
+                write_ca_bundle(ca_dict, os.path.join(out_base, "ca_structures.js"),
+                                dataset_key=os.path.basename(os.path.normpath(out_base)),
+                                confidence_sidecar=os.path.join(pdb_dir, "search_confidence.json"))
             else:
                 print(f"[Pipeline] [!] Notice: no C-alpha backbones extracted from '{pdb_dir}'; "
                       "the 3D structure viewer will have no data for this run.")
 
-            # Also ensure all cohort structure packs exist in out_base so all datasets load cleanly
-            for sf in ["ca_500_structures.js", "ca_1193_structures.js", "ca_100_structures.js", "alignments_data.js"]:
-                results_sf = os.path.join("results", sf)
-                dst_sf = os.path.join(out_base, sf)
-                if os.path.isfile(results_sf) and not os.path.isfile(dst_sf):
-                    try:
-                        shutil.copy2(results_sf, dst_sf)
-                    except Exception:
-                        pass
             manifest.record_stage(
                 "ca-extraction", "ok" if ca_dict else "skipped",
                 reason=None if ca_dict else f"no C-alpha atoms parsed from any structure in '{pdb_dir}'",
@@ -888,12 +1142,9 @@ def main():
             print(f"[Pipeline] Notice: C-alpha extraction encountered: {e}")
         _t_stage = time.time()
 
-        # Build the alignment bundle and the interactive HTML in-process. These were
-        # previously shelled out to scripts looked up under viral_phylo/, where they
-        # have never lived, so os.path.isfile() was always False and both steps were
-        # skipped without any warning while the pipeline still reported success.
-        wf_html = os.path.join(out_base, "interactive_tree.html")
-        root_html = os.path.abspath("interactive_tree.html")
+        # Update the single global interactive dashboard and master alignment bundle.
+        # Run-specific outputs remain clean in out_base without duplicating large shared bundles.
+        global_html = os.path.join("results", "interactive_tree.html")
         _html_error = None
         try:
             from viral_phylo.web.alignments import build_alignments_data
@@ -905,11 +1156,9 @@ def main():
             _html_error = f"{type(e).__name__}: {e}"
             print(f"[Pipeline] [!] Notice: Automated HTML compilation failed: {_html_error}")
 
-        # Count only files written by this run: the repo-root dashboard and older
-        # per-run copies already exist from earlier runs, so mere existence proves nothing.
         def _fresh(path):
             return os.path.isfile(path) and os.path.getmtime(path) >= _t_stage - 1
-        _html_outputs = [p for p in (wf_html, root_html, os.path.join(out_base, "alignments_data.js"))
+        _html_outputs = [p for p in (global_html, os.path.join("results", "alignments_data.js"))
                          if _fresh(p)]
         manifest.record_stage(
             "html-compile",
@@ -926,24 +1175,20 @@ def main():
         if _failed:
             print(f"[Pipeline] ❌ Pipeline finished with {len(_failed)} FAILED stage(s): {', '.join(_failed)}")
             print("[Pipeline]    See the reasons in the run manifest below.")
-        elif not _fresh(wf_html):
-            print("[Pipeline] ⚠️  Pipeline finished, but NO interactive HTML was produced.")
+        elif not _fresh(global_html):
+            print("[Pipeline] ⚠️  Pipeline finished, but NO global interactive HTML was updated.")
             print("[Pipeline]     Re-run `build-alignments` then `build-tree-view`, or check the notices above.")
         elif _skipped:
             print(f"[Pipeline] ✅ Pipeline complete, with skipped stage(s): {', '.join(_skipped)}")
         else:
             print("[Pipeline] ✅ Full Pipeline Execution & Visualization Complete!")
-        if _fresh(wf_html):
-            print(f"[Pipeline] 📊 Standalone Visualizer: file://{os.path.abspath(wf_html)}")
-        if _fresh(root_html):
-            print(f"[Pipeline] 🌐 Dashboard Visualizer:  file://{root_html}")
+        if _fresh(global_html):
+            print(f"[Pipeline] 🌐 Global Dashboard:    file://{os.path.abspath(global_html)}")
 
-        # Finalise the manifest: the inventory of what this run actually produced,
-        # and an overall status that reflects any failed or skipped stage.
+        # Finalise the manifest: the inventory of what this run actually produced
         manifest.record_outputs([
-            wf_html, root_html, meta_out_path,
+            meta_out_path,
             os.path.join(out_base, "ca_structures.js"),
-            os.path.join(out_base, "alignments_data.js"),
             os.path.join(out_base, "multi_alignment_summary.json"),
         ] + sorted(glob.glob(os.path.join(phy_dir, "**", "*.treefile"), recursive=True)))
         _statuses = [st["status"] for st in manifest.data["stages"]]

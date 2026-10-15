@@ -718,3 +718,12 @@
       opacity: 1.0 !important;
       transition: opacity 0.2s ease;
     }
+
+    /* Branch with no support anywhere above it - typically a tip hanging off the
+       unrooted root. Deliberately outside the support ramp so it reads as an
+       absence of information rather than as weak support. */
+    :root { --dim-branch: #9aa5ad; }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) { --dim-branch: #5b6670; }
+    }
+    :root[data-theme="dark"] { --dim-branch: #5b6670; }

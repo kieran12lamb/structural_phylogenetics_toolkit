@@ -170,9 +170,13 @@ viral-phylo tree \
 
 ---
 
-## 4. Interactive Visualization & Tanglegram (`interactive_tree.html`)
+## 4. Interactive Visualization & Tanglegram (`results/interactive_tree.html`)
 
-Every pipeline run writes `<output-dir>/interactive_tree.html` (generated output; not part of the repository). It lists every workflow under `results/`; `build-alignments && build-tree-view` rebuilds them all. For a pipeline run the tree shown is the whole-set tree; per-cluster IQ-TREE trees are in `phylogeny/cluster_*/` and can be opened with `viral-phylo report --tree <file>`.
+The toolkit compiles all pipeline runs and cohorts into **one global master dashboard** at `results/interactive_tree.html` (and symlinked at `interactive_tree.html` in the repo root). Run folders contain only their own data files, avoiding duplicate copies of large bundles.
+
+- **100% Serverless & Local**: Opens directly in any browser (`xdg-open results/interactive_tree.html` or `file:///...`) with zero CORS restrictions and no server required.
+- **Unified Multi-Run Dropdown**: Switch dynamically between any completed run and reference cohorts in the top header.
+- **Optional Bridge Server**: `python3 scripts/serve_interactive.py` provides in-browser pipeline execution and live Viro3D API querying.
 
 - **5 Visualization Layouts**:
   - **Phylogram**: Cartesian rectangular tree with calibrated branch lengths.
@@ -212,5 +216,5 @@ Every pipeline run writes `<output-dir>/interactive_tree.html` (generated output
 | `.iqtree` | Comprehensive report: model comparison table, log-likelihood, AIC/BIC scores, estimated rate parameters, and ASCII tree rendering. |
 | `.splits.nex` | NEXUS file containing split support values and frequencies. |
 | `.mldist` | Pairwise maximum likelihood distance matrix across all viral proteins. |
-| `interactive_tree.html` | Interactive web application with 5 layouts, tanglegram, dynamic legends, and on-hover 3D structure viewer. |
+| `results/interactive_tree.html` | Single global master dashboard unifying all runs with 5 layouts, tanglegrams, dynamic legends, and on-hover 3D structure viewer (works serverless over `file://`). |
 | `.log` | Full execution and optimization log. |

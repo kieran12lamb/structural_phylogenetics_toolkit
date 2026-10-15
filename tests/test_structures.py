@@ -123,7 +123,7 @@ class TestStructureParsing(unittest.TestCase):
         out = self.tmp_path / "ca_structures.js"
         self.assertIsNotNone(write_ca_bundle(ca, str(out)))
         text = out.read_text(encoding="utf-8")
-        self.assertTrue(text.startswith("window.CA_STRUCTURES = Object.assign("))
+        self.assertTrue(text.startswith("window.CA_STRUCTURES_BY_DATASET = Object.assign("))
         self.assertIn('"demo"', text)
 
     def test_write_ca_bundle_skips_empty(self):

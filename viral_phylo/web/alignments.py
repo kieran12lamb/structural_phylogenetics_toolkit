@@ -243,31 +243,27 @@ def build_alignments_data(repo_dir: Optional[Path] = None, results_dir: Optional
     annotate_alphabet_lengths(alignments)
     js_content = "window.ALIGNMENTS_DATA = " + json.dumps(alignments) + ";\n"
 
-    targets = [
-        repo_dir / "alignments_data.js",
-        results_dir / "alignments_data.js",
-        results_dir / "nipah_esm_workflow/alignments_data.js",
-        results_dir / "glycoprotein_workflow/phylogeny/alignments_data.js",
-        results_dir / "rdrp_100_workflow/alignments_data.js",
-    ]
+    # Single global master alignments bundle in results_dir
+    master_file = results_dir / "alignments_data.js"
+    master_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(master_file, "w", encoding="utf-8") as f:
+        f.write(js_content)
+    print(f"Generated global master alignments bundle: {master_file} ({len(js_content)} bytes)")
 
-    for d in _iter_result_dirs(results_dir):
-        if d.is_dir() and not d.name.startswith(".") and d.name not in ["foldmason_500_alignments", "foldmason_alignments", "foldmason_glycoproteins", "viro_3d_structures", "viro_500_glycoproteins", "viro_glycoproteins", "phylogeny_500_results", "phylogeny_results"]:
-            targets.append(d / "alignments_data.js")
-            if (d / "phylogeny").exists():
-                targets.append(d / "phylogeny/alignments_data.js")
+    # Convenience symlink from repo root
+    root_link = repo_dir / "alignments_data.js"
+    try:
+        if root_link.is_symlink() or root_link.exists():
+            root_link.unlink()
+        rel_target = os.path.relpath(master_file, repo_dir)
+        root_link.symlink_to(rel_target)
+    except OSError:
+        pass
 
     extra_dir = os.environ.get("ANTIGRAVITY_ARTIFACT_DIR")
     if extra_dir and Path(extra_dir).exists():
-        targets.append(Path(extra_dir) / "alignments_data.js")
-
-    targets = sorted(list(set(targets)))
-
-    for t in targets:
-        t.parent.mkdir(parents=True, exist_ok=True)
-        with open(t, "w", encoding="utf-8") as f:
+        with open(Path(extra_dir) / "alignments_data.js", "w", encoding="utf-8") as f:
             f.write(js_content)
-        print(f"Generated {t} ({len(js_content)} bytes)")
 
     print("=== Successfully generated alignments_data.js with coverage & partitions ===")
     return alignments

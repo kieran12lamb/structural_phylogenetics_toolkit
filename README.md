@@ -20,7 +20,9 @@ By computing evolutionary relationships on **tertiary 3D protein structure coord
 5. **Fast Whole-Set Trees**: An overview tree of the entire input with **VeryFastTree**, using the same 3Di matrix as IQ-TREE — about a minute for 1,000+ taxa rather than days.
 6. **PLM Embedding Trees & Clustering (`embed`)**: Extract sequence representations from **ESM-2 (650M)** or **ESM-C (600M)**, compute semantic distance matrices (Cosine, Euclidean, L1/Manhattan), and build hierarchical trees with silhouette profile analysis.
 7. **Run Manifest & Provenance**: Every pipeline run records its exact command, resolved settings, tool versions, input fingerprint and the outcome of every stage — including anything skipped or failed, and why.
-8. **Interactive Visualization Suite (`interactive_tree.html`)**:
+8. **Single Global Interactive Dashboard (`results/interactive_tree.html`)**:
+   - **Centralized & Serverless**: One single global dashboard unifies all pipeline runs and reference cohorts. Opens directly in any browser (`file:///...`) with zero CORS restrictions or web server required.
+   - **Unified Dataset Switcher**: Switch seamlessly between all completed runs and reference cohorts from the top navigation bar.
    - **5 Tree Layouts**: Rectangular Phylogram, Cladogram, Radial Tree, Equal-Angle Unrooted Tree, and Cophylogenetic Tanglegram.
    - **Dual Cophylogenetic Tanglegram**: Direct comparison of 3Di Tertiary Structure vs. Primary AA Sequence vs. ESM-2 PLM Distance Trees, complete with Robinson-Foulds and Cophenetic congruence metrics.
    - **Interactive 3D C$\alpha$ Backbone Viewer**: Live rotation and pLDDT confidence coloring directly on hover/click.
@@ -215,18 +217,24 @@ On a 1,193-structure Nipah binder set, where the global alignment was 91.6% gaps
 Each pipeline run writes to its `--output-dir`:
 
 ```
-results/my_run/
-├── run_manifest.json / .txt     # command, settings, tool versions, input fingerprint, per-stage status
-├── interactive_tree.html        # interactive dashboard for this run
-├── taxa_metadata.json           # standardized metadata
-├── multi_alignment_summary.json # clusters, QC, selection and recursion record (--multi-alignment)
-├── alignment/
-│   ├── foldmason.fasta_3di.fa   # whole-set alignment (3Di and _aa.fa)
-│   ├── alignment_info.json      # which aligner really produced the files
-│   └── cluster_<n>_<threshold>/ # one directory per cluster (aligned clusters have their own alignment_info.json)
-└── phylogeny/
-    ├── *_3di_fasttree.treefile  # whole-set trees (+ .info.json: program, version, model, command)
-    └── cluster_<n>_<threshold>/ # IQ-TREE output per cluster (+ .start_tree.json when guided)
+results/
+├── interactive_tree.html        # Single global master dashboard for ALL runs
+├── index.html -> interactive_tree.html
+├── alignments_data.js           # Master multi-alignment bundle
+├── ca_*_structures.js           # Master reference structure coordinates
+│
+└── my_run/                      # Clean run folder: run-specific outputs only
+    ├── run_manifest.json / .txt # command, settings, tool versions, input fingerprint, per-stage status
+    ├── ca_structures.js         # C-alpha 3D coordinates specific to this cohort
+    ├── taxa_metadata.json       # standardized metadata
+    ├── multi_alignment_summary.json # clusters, QC, selection and recursion record (--multi-alignment)
+    ├── alignment/
+    │   ├── foldmason.fasta_3di.fa   # whole-set alignment (3Di and _aa.fa)
+    │   ├── alignment_info.json      # which aligner really produced the files
+    │   └── cluster_<n>_<threshold>/ # one directory per cluster
+    └── phylogeny/
+        ├── *_3di_fasttree.treefile  # whole-set trees (+ .info.json: program, version, model, command)
+        └── cluster_<n>_<threshold>/ # IQ-TREE output per cluster (+ .start_tree.json when guided)
 ```
 
 The manifest is rewritten after every stage, so an interrupted run still leaves a record, and it ends with an explicit status: `completed`, `completed_with_skips`, `failed`, or `interrupted`. Alignment files keep their historical `foldmason.fasta_*.fa` names even when MAFFT produced them — `alignment_info.json` records the real producer.
@@ -235,22 +243,38 @@ The manifest is rewritten after every stage, so an interrupted run still leaves 
 
 ## 🖥️ Interactive Web Visualization Suite
 
-Each pipeline run writes its dashboard to `<output-dir>/interactive_tree.html`; open it in any web browser:
+The suite compiles all pipeline runs and reference cohorts into **one global dashboard** at `results/interactive_tree.html`. Instead of fragmenting outputs across multiple large HTML files, all completed runs are navigable from a single dataset dropdown.
+
+### 1. View Locally & Serverless (No Server Needed)
+The dashboard is completely self-contained and opens directly in your web browser over `file://` with **zero CORS restrictions**:
 
 ```bash
-open results/my_run/interactive_tree.html
+# Linux
+xdg-open results/interactive_tree.html
+# macOS
+open results/interactive_tree.html
+# Or double-click results/interactive_tree.html in your file manager
 ```
+* **Unified Dataset Switcher**: Switch instantly between all runs (`300_rdrp`, `nipah_binders_v4`, `orf7a_bfvd`, etc.) and reference cohorts from the top navigation bar.
+* **Full Tree Rotation & Orientation**: Rotate the entire tree view across all layouts (Rectangular Phylogram, Cladogram, Radial, Unrooted Star) from 0° to 360° via the floating canvas HUD or sidebar, with 1-click 90° orientation presets (Right 0°, Down 90°, Left 180°, Up 270°).
+* **Interactive Subtree & Clade Flipping**: Rotate/swap child branch orders at any internal node by clicking branch splits, Shift-clicking internal nodes, clicking "🔄 Rotate Subtree" in the clade popover, or pressing `R`.
+* **Zero Overhead**: Run directories store only their own data files (~2 MB), saving hundreds of megabytes of duplicate HTML and JavaScript bundles.
+* **Auto-Refreshing**: Running a new pipeline automatically updates `results/interactive_tree.html`. Just hit `F5` / `Cmd+R` in your open browser tab to see the new run.
 
-The dashboard is generated output and is not part of the repository. It lists every workflow found under `results/`, so a fresh clone has none until you run a pipeline. To rebuild the dashboards for everything already in `results/`:
+### 2. View via Interactive Bridge Server (Optional)
+To trigger new pipeline runs or query the Viro3D API directly from the browser UI, launch the local bridge server:
+
+```bash
+python3 scripts/serve_interactive.py --port 8080
+# or: viral-phylo serve
+```
+Then navigate to `http://localhost:8080/`.
+
+### 3. Rebuild the Global Dashboard
+To refresh the global dashboard across all completed runs in `results/`:
 
 ```bash
 build-alignments && build-tree-view
-```
-
-Or start the optional local bridge server for running pipelines directly from the web interface:
-
-```bash
-python3 scripts/serve_interactive.py --port 8000
 ```
 
 ### Visualising Your Own Tree

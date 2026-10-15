@@ -126,10 +126,20 @@ viral-phylo pipeline \
 See [section 4](#4-handling-divergent-datasets-clustering--recursion) for what each step does and how to tune it.
 
 ### Scenario D: Launch the Interactive Web Suite
-Every pipeline run writes `<output-dir>/interactive_tree.html`; open it directly in a browser. To use in-browser pipeline execution, start the bridge server instead:
-```bash
-python scripts/serve_interactive.py
-```
+All pipeline runs and reference cohorts are unified into **one single global dashboard** at `results/interactive_tree.html`.
+
+- **Option 1: Open Directly & Serverless (Zero Server Required)**:
+  ```bash
+  # Linux: xdg-open results/interactive_tree.html
+  # macOS: open results/interactive_tree.html
+  # Or paste file:///path/to/results/interactive_tree.html into any browser
+  ```
+- **Option 2: Launch the Interactive Bridge Server**:
+  ```bash
+  python scripts/serve_interactive.py --port 8080
+  # or: viral-phylo serve
+  ```
+  Opens `http://localhost:8080/` with live in-browser pipeline execution and Viro3D querying.
 
 ---
 
@@ -541,26 +551,47 @@ The metadata parser ([`scripts/metadata_handler.py`](scripts/metadata_handler.py
 
 ## 8. Interactive Web Visualization Suite
 
-Each pipeline run generates an interactive browser application at `<output-dir>/interactive_tree.html`. It is generated output, not part of the repository, and it lists every workflow found under `results/` — so a fresh clone has none until a pipeline has run. To rebuild the dashboards for everything already in `results/`, run `build-alignments && build-tree-view` from the repository root.
+The suite compiles all completed runs and reference cohorts into **one global master dashboard** at `results/interactive_tree.html`. Instead of copying large 13–60 MB HTML files and 24 MB alignment bundles into every run subfolder, all datasets are explored from a single interface.
 
 ### Launching the Viewer
-- **Option 1 (Interactive Bridge Server)**:
+- **Option 1: Direct Browser Open (100% Serverless & Local)**:
+  Open `results/interactive_tree.html` (or the repository root symlink `interactive_tree.html`) in Chrome, Firefox, Safari, or Edge:
   ```bash
-  python scripts/serve_interactive.py
+  xdg-open results/interactive_tree.html   # Linux
+  open results/interactive_tree.html       # macOS
   ```
-  Opens `http://localhost:8000` with direct in-browser pipeline execution and Viro3D querying enabled.
-- **Option 2 (Direct Browser Open)**:
-  Open `<output-dir>/interactive_tree.html` in Chrome, Firefox, Safari, or Edge.
+  * **Zero Server Overhead**: Works completely offline over `file://` with **zero CORS restrictions**. Trees, metadata tables, and silhouettes are inlined in memory, while 3D C-alpha coordinates and MSA data load via standard relative script tags.
+  * **Unified Multi-Run Dropdown**: Switch dynamically between any run (`300_rdrp`, `nipah_binders_v4`, `orf7a_bfvd`, etc.) and bundled reference cohorts in the top header.
+  * **Clean Run Directories**: Run directories store only their own outputs (`phylogeny/`, `alignment/`, and `ca_structures.js`), saving hundreds of megabytes of duplicated assets.
+- **Option 2: Interactive Bridge Server**:
+  ```bash
+  python scripts/serve_interactive.py --port 8080
+  # or: viral-phylo serve
+  ```
+  Opens `http://localhost:8080/` with direct in-browser pipeline triggering and live Viro3D API querying.
 
 ---
 
 ### Tree Layouts & Exploration
 Switch between 5 visualization layouts via the **Visualization Layout** buttons in the left sidebar:
-1. **Phylo (Rectangular Phylogram)**: Branch lengths represent evolutionary substitutions per structural 3Di site or amino acid substitution.
-2. **Clado (Cladogram)**: Equal-length branches highlighting branching order and topological relationships.
-3. **Radial Tree**: Circular tree layout projecting outwards from the root, ideal for inspecting broad clades.
-4. **Unrooted Star Tree**: Equal-angle unrooted star tree layout showing global evolutionary divergence without rooting bias.
+1. **Phylo (Rectangular Phylogram)**: Branch lengths represent evolutionary substitutions per structural 3Di site or amino acid substitution. Supports continuous 0°–360° rotation and 90° orientation steps (Right, Down, Left, Up) with upright tip labels.
+2. **Clado (Cladogram)**: Equal-length branches highlighting branching order and topological relationships with full canvas rotation.
+3. **Radial Tree**: Circular tree layout projecting outwards from the root, ideal for inspecting broad clades with 360° circular rotation.
+4. **Unrooted Star Tree**: Equal-angle unrooted star tree layout showing global evolutionary divergence without rooting bias, with 360° star rotation.
 5. **Tangle (Dual Tanglegram)**: Side-by-side comparison of dual phylogenetic topologies with interactive connecting ribbons.
+
+### Tree Rotation & Subtree Flipping Controls
+You can rotate both the global tree orientation and individual evolutionary subtrees:
+- **Global Tree & Canvas Rotation (All Layouts)**:
+  - **Floating HUD Toolbar (Bottom-Right)**: Immediate 1-click `↺` (-90°) and `↻` (+90°) buttons, live degrees indicator badge (`0°`), and a quick popover slider (0°–360°) with instant orientation presets (`0° Right`, `90° Down`, `180° Left`, `270° Up`, and `Reset`).
+  - **Sidebar Controls**: Dedicated rotation sliders with quick step buttons inside Phylogram, Radial, and Unrooted sidebar cards.
+  - **Keyboard Shortcut**: Press `R` to rotate the tree by +90° (or `Shift+R` for -90°).
+  - **Upright Text Readability**: In Cartesian rectangular and cladogram layouts, tip labels automatically counter-rotate so text remains 100% horizontal and legible at any rotation angle.
+- **Interactive Subtree & Clade Flipping (Branch Swapping)**:
+  - **Click Branch Split**: Left-click any internal vertical branch split line to swap its children without modifying phylogenetic topology.
+  - **Clade Popover**: Hover over any clade or branch and click **"🔄 Rotate Subtree"** in the hover card.
+  - **Shift-Click / Alt-Click**: Click any internal node circle while holding `Shift` or `Alt` to instantly flip its child branches.
+  - **Clade Partition Roster**: Click **"🔄 Rotate"** next to any detected cluster in the sidebar *Clade Partitions* roster to flip that clade's subtree.
 
 ### Tree Datasets & Multi-Metric PLM Embedding Trees
 In the **Tree Dataset** dropdown, switch between:

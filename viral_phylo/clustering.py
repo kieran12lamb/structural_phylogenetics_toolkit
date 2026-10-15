@@ -838,6 +838,69 @@ def _cluster_tag(threshold_kind: str, threshold: float) -> str:
             "min_seq_id": f"id{threshold:g}"}.get(threshold_kind, f"t{threshold:g}")
 
 
+def qc_structure_dir(
+    pdb_dir: str,
+    work_dir: str,
+    min_length: int = 50,
+    min_length_frac: float = 0.4,
+    foldmason_bin: str = None,
+    threads: int = None,
+    manifest: Any = None,
+) -> Dict[str, Any]:
+    """Apply sequence QC to a structure directory, returning a filtered directory.
+
+    QC used to run inside clustering only, so the whole-set alignment and the master
+    trees built from it never saw its verdict: a run could record 1135 retained taxa
+    and still emit 1193-tip trees. Hoisting it here lets one filtered set feed both
+    the master alignment and the clustering, so the counts agree.
+
+    The filtered directory holds symlinks, not copies.
+    """
+    # Imported here, as elsewhere in this module: viral_phylo.alignment imports from
+    # clustering, so a module-level import would be circular.
+    from viral_phylo.alignment import extract_unaligned_sequences
+
+    os.makedirs(work_dir, exist_ok=True)
+    structure_files: List[str] = []
+    for pattern in ("*.pdb", "*.cif", "*.mmcif"):
+        structure_files.extend(glob.glob(os.path.join(pdb_dir, pattern)))
+    structure_files = sorted(set(structure_files))
+    if len(structure_files) < 2:
+        raise ValueError(f"Need at least 2 structures for QC, found {len(structure_files)} in '{pdb_dir}'.")
+    taxon_to_file = {os.path.splitext(os.path.basename(p))[0]: p for p in structure_files}
+
+    unaligned_aa, _ = extract_unaligned_sequences(
+        structure_files, work_dir, foldmason_bin=foldmason_bin, threads=threads)
+    sequences = parse_fasta(unaligned_aa)
+    kept, excluded = qc_filter_sequences(sequences, min_length=min_length,
+                                         min_length_frac=min_length_frac)
+    print(f"[QC] {len(sequences)} sequences -> {len(kept)} kept, {len(excluded)} excluded "
+          f"(min length {min_length}, or {min_length_frac:g} x median)")
+    if manifest is not None:
+        manifest.record_qc(excluded, retained=len(kept))
+
+    qc_dir = os.path.join(work_dir, "qc_structures")
+    os.makedirs(qc_dir, exist_ok=True)
+    for taxon in kept:
+        source = taxon_to_file.get(taxon)
+        if not source:
+            continue
+        link = os.path.join(qc_dir, os.path.basename(source))
+        if not os.path.exists(link):
+            try:
+                os.symlink(os.path.abspath(source), link)
+            except OSError:
+                shutil.copy2(source, link)
+
+    return {
+        "dir": qc_dir,
+        "fasta": write_fasta(kept, os.path.join(work_dir, "qc_sequences.fasta")),
+        "kept": kept,
+        "excluded": excluded,
+        "input_count": len(sequences),
+    }
+
+
 def partition_structures_by_similarity(
     pdb_dir: str,
     output_dir: str,
@@ -866,6 +929,7 @@ def partition_structures_by_similarity(
     mafft_matrix: str = "matrices/mat3di.out",
     threads: int = 0,
     manifest: Any = None,
+    qc_already_applied: bool = False,
 ) -> Dict[str, Any]:
     """Partition structures by measured similarity, then align each cluster.
 
@@ -898,12 +962,18 @@ def partition_structures_by_similarity(
 
     # 2. QC. Short fragments cannot be meaningfully aligned or clustered and are
     #    what stretch a global alignment into a staircase of gaps.
-    kept, excluded = qc_filter_sequences(sequences, min_length=min_length,
-                                         min_length_frac=min_length_frac)
-    print(f"[Cluster] QC: {len(sequences)} sequences -> {len(kept)} kept, {len(excluded)} excluded "
-          f"(min length {min_length}, or {min_length_frac:g} x median)")
-    if manifest is not None:
-        manifest.record_qc(excluded, retained=len(kept))
+    if qc_already_applied:
+        # The caller filtered before aligning. Re-filtering here would recompute the
+        # floor from the already-filtered median and drop a second, larger slice.
+        kept, excluded = sequences, []
+        print(f"[Cluster] QC: already applied upstream, {len(kept)} sequences carried through")
+    else:
+        kept, excluded = qc_filter_sequences(sequences, min_length=min_length,
+                                             min_length_frac=min_length_frac)
+        print(f"[Cluster] QC: {len(sequences)} sequences -> {len(kept)} kept, {len(excluded)} excluded "
+              f"(min length {min_length}, or {min_length_frac:g} x median)")
+        if manifest is not None:
+            manifest.record_qc(excluded, retained=len(kept))
 
     qc_fasta = write_fasta(kept, os.path.join(work, "qc_sequences.fasta"))
     qc_structures = os.path.join(work, "qc_structures")

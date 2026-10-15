@@ -89,6 +89,7 @@
     <!-- Right: Live Status Badges & Quick Tools (Fluid Responsive Scaling) -->
     <div class="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
       <!-- Cohort Count Badge -->
+      <span id="treeProvenanceBadge" class="hidden text-[9px] font-mono px-2 py-0.5 rounded-full"></span>
       <span id="badgeTaxa" class="hidden md:inline-flex text-[10.5px] font-mono px-2 py-0.5 rounded-full bg-[var(--chip-bg)] border border-[var(--border-color)] text-[var(--text-main)] whitespace-nowrap">
         1,193 ESMFold Designs
       </span>
@@ -226,35 +227,39 @@
     <!-- LEFT FLOATING CONTROLS & MANAGEMENT SIDEBAR (Consistent Fixed Width) -->
     <div id="sidebar" class="w-[340px] min-w-[340px] max-w-[340px] border-r border-[var(--border-color)] bg-[var(--panel-bg)] backdrop-blur-md flex flex-col z-20 shrink-0 h-full overflow-hidden">
       
-      <!-- SIDEBAR TAB NAVIGATION (7 Tabs: View, Filter, Cuts, Align, Clade, Root, Run/Fetch) -->
+      <!-- SIDEBAR TAB NAVIGATION (8 Tabs: View, Filter, Cuts, Align, Clade, Root, Run, Diagnostics) -->
       <div class="flex border-b border-[var(--border-color)] shrink-0 bg-[var(--card-bg)]">
         <button id="tabBtnDisplay" onclick="switchSidebarTab('display')" class="flex-1 py-1.5 text-center font-bold text-sky-400 border-b-2 border-sky-400 transition flex flex-col items-center justify-center leading-tight" title="Display & Layout Settings">
-          <span class="text-[13px] leading-none">⚙️</span>
-          <span class="text-[8.5px] mt-0.5 flex items-center gap-0.5">View</span>
+          <span class="text-[12px] leading-none">⚙️</span>
+          <span class="text-[8px] mt-0.5 flex items-center gap-0.5">View</span>
         </button>
         <button id="tabBtnFilter" onclick="switchSidebarTab('filter')" class="flex-1 py-1.5 text-center font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] border-b-2 border-transparent transition flex flex-col items-center justify-center leading-tight" title="Metadata Taxa Filter">
-          <span class="text-[13px] leading-none">🎯</span>
-          <span class="text-[8.5px] mt-0.5 flex items-center gap-0.5">Filter<span id="tabFilterBadge" class="text-[7.5px] font-mono px-0.5 rounded-full bg-emerald-500/20 text-emerald-400">All</span></span>
+          <span class="text-[12px] leading-none">🎯</span>
+          <span class="text-[8px] mt-0.5 flex items-center gap-0.5">Filt<span id="tabFilterBadge" class="text-[7.5px] font-mono px-0.5 rounded-full bg-emerald-500/20 text-emerald-400">All</span></span>
         </button>
         <button id="tabBtnCuts" onclick="switchSidebarTab('cuts')" class="flex-1 py-1.5 text-center font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] border-b-2 border-transparent transition flex flex-col items-center justify-center leading-tight" title="Cluster / Clade Cut Selection">
-          <span class="text-[13px] leading-none">🧩</span>
-          <span class="text-[8.5px] mt-0.5 flex items-center gap-0.5">Cuts<span id="tabCutsBadge" class="text-[7.5px] font-mono px-0.5 rounded-full bg-sky-500/20 text-sky-400">0</span></span>
+          <span class="text-[12px] leading-none">🧩</span>
+          <span class="text-[8px] mt-0.5 flex items-center gap-0.5">Cuts<span id="tabCutsBadge" class="text-[7.5px] font-mono px-0.5 rounded-full bg-sky-500/20 text-sky-400">0</span></span>
         </button>
         <button id="tabBtnAlign" onclick="switchSidebarTab('align')" class="flex-1 py-1.5 text-center font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] border-b-2 border-transparent transition flex flex-col items-center justify-center leading-tight" title="Alignment Partition Selection">
-          <span class="text-[13px] leading-none">🧬</span>
-          <span class="text-[8.5px] mt-0.5 flex items-center gap-0.5">Align<span id="tabAlignBadge" class="text-[7.5px] font-mono px-0.5 rounded-full bg-amber-500/20 text-amber-400">0</span></span>
+          <span class="text-[12px] leading-none">🧬</span>
+          <span class="text-[8px] mt-0.5 flex items-center gap-0.5">Algn<span id="tabAlignBadge" class="text-[7.5px] font-mono px-0.5 rounded-full bg-amber-500/20 text-amber-400">0</span></span>
         </button>
         <button id="tabBtnClades" onclick="switchSidebarTab('clades')" class="flex-1 py-1.5 text-center font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] border-b-2 border-transparent transition flex flex-col items-center justify-center leading-tight" title="Clade Management">
-          <span class="text-[13px] leading-none">🌿</span>
-          <span class="text-[8.5px] mt-0.5 flex items-center gap-0.5">Clade<span id="tabCladeCountBadge" class="text-[7.5px] font-mono px-0.5 rounded-full bg-sky-500/20 text-sky-400">0</span></span>
+          <span class="text-[12px] leading-none">🌿</span>
+          <span class="text-[8px] mt-0.5 flex items-center gap-0.5">Clad<span id="tabCladeCountBadge" class="text-[7.5px] font-mono px-0.5 rounded-full bg-sky-500/20 text-sky-400">0</span></span>
         </button>
         <button id="tabBtnRooting" onclick="switchSidebarTab('rooting')" class="flex-1 py-1.5 text-center font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] border-b-2 border-transparent transition flex flex-col items-center justify-center leading-tight" title="Tree Rooting">
-          <span class="text-[13px] leading-none">⚓</span>
-          <span class="text-[8.5px] mt-0.5 flex items-center gap-0.5">Root</span>
+          <span class="text-[12px] leading-none">⚓</span>
+          <span class="text-[8px] mt-0.5 flex items-center gap-0.5">Root</span>
         </button>
         <button id="tabBtnPipeline" onclick="switchSidebarTab('pipeline')" class="flex-1 py-1.5 text-center font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] border-b-2 border-transparent transition flex flex-col items-center justify-center leading-tight" title="Run Pipeline & Query Viro3D">
-          <span class="text-[13px] leading-none">🚀</span>
-          <span class="text-[8.5px] mt-0.5 flex items-center gap-0.5">Run</span>
+          <span class="text-[12px] leading-none">🚀</span>
+          <span class="text-[8px] mt-0.5 flex items-center gap-0.5">Run</span>
+        </button>
+        <button id="tabBtnDiag" onclick="switchSidebarTab('diag')" class="flex-1 py-1.5 text-center font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] border-b-2 border-transparent transition flex flex-col items-center justify-center leading-tight" title="Run Diagnostics & Interpretation Caveats">
+          <span class="text-[12px] leading-none">🩺</span>
+          <span class="text-[8px] mt-0.5 flex items-center gap-0.5">Diag<span id="tabDiagBadge" class="text-[7.5px] font-mono px-0.5 rounded-full bg-rose-500/20 text-rose-400">0</span></span>
         </button>
       </div>
 
@@ -278,7 +283,7 @@
               <button type="button" onclick="document.getElementById('customTreeFileInput').click()" title="Open a Newick or NEXUS tree file (.nwk, .treefile, .tre, .nex)" class="py-1.5 rounded-md font-medium text-center border border-[var(--border-color)] bg-[var(--chip-bg)] hover:border-sky-400 text-[var(--text-main)] text-[10.5px] transition">📂 Load tree file</button>
               <button type="button" id="customMetadataBtn" disabled onclick="document.getElementById('customMetadataFileInput').click()" title="Load a tree file first" class="py-1.5 rounded-md font-medium text-center border border-[var(--border-color)] bg-[var(--chip-bg)] hover:border-sky-400 text-[var(--text-main)] text-[10.5px] transition disabled:opacity-40 disabled:cursor-not-allowed">🏷️ Add metadata</button>
             </div>
-            <input type="file" id="customTreeFileInput" class="hidden" accept=".nwk,.newick,.tre,.tree,.treefile,.nex,.nexus,.nxs,.txt" onchange="onCustomTreeFileChosen(this)">
+            <input type="file" id="customTreeFileInput" class="hidden" accept=".nwk,.newick,.tre,.tree,.treefile,.contree,.boottrees,.nex,.nexus,.nxs,.txt" onchange="onCustomTreeFileChosen(this)">
             <input type="file" id="customMetadataFileInput" class="hidden" accept=".csv,.tsv,.tab,.txt,.json" onchange="onCustomMetadataFileChosen(this)">
             <p id="customTreeStatus" class="hidden mt-1.5 text-[10px] leading-snug text-[var(--text-muted)] break-words select-text"></p>
           </div>
@@ -466,6 +471,29 @@
               <label class="font-semibold text-[var(--text-muted)] uppercase tracking-wider block text-[10px]">📐 Phylogram Options</label>
               <span class="text-[9px] font-mono px-1.5 py-0.5 rounded-full bg-sky-950 text-sky-400 border border-sky-800/40">Linear</span>
             </div>
+
+            <!-- Tree Rotation & Orientation -->
+            <div>
+              <div class="flex justify-between text-[11px] mb-1">
+                <span class="text-[var(--text-muted)] flex items-center space-x-1">
+                  <span>🔄</span><span>Tree Rotation &amp; Orientation:</span>
+                </span>
+                <span id="rectRotationVal" class="font-mono text-sky-400 font-semibold">0°</span>
+              </div>
+              <div class="flex items-center space-x-2">
+                <input type="range" id="rectRotationSlider" min="0" max="360" value="0" oninput="setTreeRotation(this.value)" class="flex-1 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-sky-400" title="Rotate rectangular tree in 360 degrees">
+                <button onclick="stepTreeRotation(-90)" class="p-1 rounded bg-slate-700/40 hover:bg-slate-700 text-[10px] text-[var(--text-muted)] cursor-pointer" title="Rotate -90° (Counter-clockwise)">↺</button>
+                <button onclick="stepTreeRotation(90)" class="p-1 rounded bg-slate-700/40 hover:bg-slate-700 text-[10px] text-[var(--text-muted)] cursor-pointer" title="Rotate +90° (Clockwise)">↻</button>
+                <button onclick="setTreeRotation(0)" class="p-1 rounded bg-slate-700/40 hover:bg-slate-700 text-[10px] text-rose-400 cursor-pointer" title="Reset to 0°">✕</button>
+              </div>
+              <div class="grid grid-cols-4 gap-1 pt-1.5 text-[9.5px]">
+                <button onclick="setTreeRotation(0)" class="py-0.5 px-1 rounded bg-slate-500/10 hover:bg-slate-500/25 text-[var(--text-muted)] hover:text-white border border-[var(--border-color)] text-center transition cursor-pointer" title="Standard Horizontal (Left to Right)">0° Right</button>
+                <button onclick="setTreeRotation(90)" class="py-0.5 px-1 rounded bg-slate-500/10 hover:bg-slate-500/25 text-[var(--text-muted)] hover:text-white border border-[var(--border-color)] text-center transition cursor-pointer" title="Vertical (Top to Bottom)">90° Down</button>
+                <button onclick="setTreeRotation(180)" class="py-0.5 px-1 rounded bg-slate-500/10 hover:bg-slate-500/25 text-[var(--text-muted)] hover:text-white border border-[var(--border-color)] text-center transition cursor-pointer" title="Inverted (Right to Left)">180° Left</button>
+                <button onclick="setTreeRotation(270)" class="py-0.5 px-1 rounded bg-slate-500/10 hover:bg-slate-500/25 text-[var(--text-muted)] hover:text-white border border-[var(--border-color)] text-center transition cursor-pointer" title="Ascending (Bottom to Top)">270° Up</button>
+              </div>
+            </div>
+
             <label class="flex items-center justify-between cursor-pointer">
               <span class="text-[var(--text-main)] text-xs">Align Leaf Labels</span>
               <input type="checkbox" id="toggleAlign" onchange="toggleSetting('alignLabels', this.checked)" class="accent-sky-500">
@@ -499,7 +527,15 @@
               </div>
               <div class="flex items-center space-x-2">
                 <input type="range" id="treeRotationSlider" min="0" max="360" value="0" oninput="setTreeRotation(this.value)" class="flex-1 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-sky-400" title="Rotate radial tree in 360 degrees">
-                <button onclick="setTreeRotation(0); document.getElementById('treeRotationSlider').value=0;" class="p-1 rounded bg-slate-700/40 hover:bg-slate-700 text-[10px] text-[var(--text-muted)]" title="Reset rotation to 0°">↺</button>
+                <button onclick="stepTreeRotation(-90)" class="p-1 rounded bg-slate-700/40 hover:bg-slate-700 text-[10px] text-[var(--text-muted)] cursor-pointer" title="Rotate -90°">↺</button>
+                <button onclick="stepTreeRotation(90)" class="p-1 rounded bg-slate-700/40 hover:bg-slate-700 text-[10px] text-[var(--text-muted)] cursor-pointer" title="Rotate +90°">↻</button>
+                <button onclick="setTreeRotation(0)" class="p-1 rounded bg-slate-700/40 hover:bg-slate-700 text-[10px] text-rose-400 cursor-pointer" title="Reset rotation to 0°">✕</button>
+              </div>
+              <div class="grid grid-cols-4 gap-1 pt-1.5 text-[9.5px]">
+                <button onclick="setTreeRotation(0)" class="py-0.5 px-1 rounded bg-slate-500/10 hover:bg-slate-500/25 text-[var(--text-muted)] hover:text-white border border-[var(--border-color)] text-center transition cursor-pointer">0°</button>
+                <button onclick="setTreeRotation(90)" class="py-0.5 px-1 rounded bg-slate-500/10 hover:bg-slate-500/25 text-[var(--text-muted)] hover:text-white border border-[var(--border-color)] text-center transition cursor-pointer">90°</button>
+                <button onclick="setTreeRotation(180)" class="py-0.5 px-1 rounded bg-slate-500/10 hover:bg-slate-500/25 text-[var(--text-muted)] hover:text-white border border-[var(--border-color)] text-center transition cursor-pointer">180°</button>
+                <button onclick="setTreeRotation(270)" class="py-0.5 px-1 rounded bg-slate-500/10 hover:bg-slate-500/25 text-[var(--text-muted)] hover:text-white border border-[var(--border-color)] text-center transition cursor-pointer">270°</button>
               </div>
             </div>
 
@@ -555,6 +591,23 @@
                 <span class="text-[var(--text-main)]">🌈 Clade Sector Halos</span>
                 <input type="checkbox" id="toggleCladeSectors" checked onchange="toggleSetting('cladeSectors', this.checked)" class="accent-sky-500">
               </label>
+
+              <label class="flex items-center justify-between cursor-pointer" title="Terminal branches have no support of their own; colour them by the clade they descend from so support colouring reaches the tips">
+                <span class="text-[var(--text-main)]">🌱 Support Colour to Tips</span>
+                <input type="checkbox" id="toggleInheritSupportTips" checked onchange="toggleSetting('inheritSupportColorToTips', this.checked)" class="accent-sky-500">
+              </label>
+
+              <!-- 3D structure confidence colouring -->
+              <div id="structColorRow" class="space-y-1 pt-1.5 border-t border-[var(--border-color)]/60">
+                <label class="font-semibold text-[var(--text-muted)] uppercase tracking-wider block text-[9.5px]">🧊 Colour 3D Structure By</label>
+                <select id="structColorSelect" onchange="setStructureColorMode(this.value)" class="w-full bg-[var(--input-bg)] border border-[var(--border-color)] rounded-md px-2 py-1 text-[10.5px] text-[var(--text-main)] font-medium focus:outline-none focus:border-sky-400">
+                  <option value="auto" selected>Auto &mdash; LDDT where available</option>
+                  <option value="lddt">LDDT to search query (0&ndash;1)</option>
+                  <option value="native">Native confidence (pLDDT / B-factor)</option>
+                  <option value="none">Uniform</option>
+                </select>
+                <p id="structColorNote" class="text-[9px] text-[var(--text-muted)] leading-snug"></p>
+              </div>
             </div>
           </div>
 
@@ -578,7 +631,15 @@
               </div>
               <div class="flex items-center space-x-2">
                 <input type="range" id="unrootedRotationSlider" min="0" max="360" value="0" oninput="setTreeRotation(this.value)" class="flex-1 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-400" title="Rotate unrooted star tree in 360 degrees">
-                <button onclick="setTreeRotation(0); document.getElementById('unrootedRotationSlider').value=0;" class="p-1 rounded bg-slate-700/40 hover:bg-slate-700 text-[10px] text-[var(--text-muted)]" title="Reset rotation to 0°">↺</button>
+                <button onclick="stepTreeRotation(-90)" class="p-1 rounded bg-slate-700/40 hover:bg-slate-700 text-[10px] text-[var(--text-muted)] cursor-pointer" title="Rotate -90°">↺</button>
+                <button onclick="stepTreeRotation(90)" class="p-1 rounded bg-slate-700/40 hover:bg-slate-700 text-[10px] text-[var(--text-muted)] cursor-pointer" title="Rotate +90°">↻</button>
+                <button onclick="setTreeRotation(0)" class="p-1 rounded bg-slate-700/40 hover:bg-slate-700 text-[10px] text-rose-400 cursor-pointer" title="Reset rotation to 0°">✕</button>
+              </div>
+              <div class="grid grid-cols-4 gap-1 pt-1.5 text-[9.5px]">
+                <button onclick="setTreeRotation(0)" class="py-0.5 px-1 rounded bg-slate-500/10 hover:bg-slate-500/25 text-[var(--text-muted)] hover:text-white border border-[var(--border-color)] text-center transition cursor-pointer">0°</button>
+                <button onclick="setTreeRotation(90)" class="py-0.5 px-1 rounded bg-slate-500/10 hover:bg-slate-500/25 text-[var(--text-muted)] hover:text-white border border-[var(--border-color)] text-center transition cursor-pointer">90°</button>
+                <button onclick="setTreeRotation(180)" class="py-0.5 px-1 rounded bg-slate-500/10 hover:bg-slate-500/25 text-[var(--text-muted)] hover:text-white border border-[var(--border-color)] text-center transition cursor-pointer">180°</button>
+                <button onclick="setTreeRotation(270)" class="py-0.5 px-1 rounded bg-slate-500/10 hover:bg-slate-500/25 text-[var(--text-muted)] hover:text-white border border-[var(--border-color)] text-center transition cursor-pointer">270°</button>
               </div>
             </div>
 
@@ -999,6 +1060,10 @@
                 <option value="length">Sort: alignment columns</option>
                 <option value="name">Sort: name</option>
               </select>
+              <label class="flex items-center gap-1 text-[9px] text-[var(--text-muted)] cursor-pointer whitespace-nowrap" title="When a cluster has its own tree, show it instead of the whole-set tree filtered to the same taxa">
+                <input type="checkbox" id="toggleUseClusterTrees" checked onchange="setUseClusterTrees(this.checked)" class="accent-amber-500">
+                <span>Cluster tree</span>
+              </label>
               <button id="btnToggleMinAlignFilter" onclick="toggleMinAlignFilter()" class="badge-amber text-[8.5px] px-1.5 py-1 rounded font-semibold cursor-pointer transition hover:opacity-90 whitespace-nowrap" title="Toggle visibility of partitions with fewer than 5 sequences">
                 🛡️ &ge;5 Seqs: ON
               </button>
@@ -1009,6 +1074,33 @@
               <label class="font-semibold text-[var(--text-muted)] uppercase tracking-wider block text-[9.5px]">Available Alignments (<span id="alignRosterCount">0</span>)</label>
               <div id="alignPartitionRoster" class="space-y-2 max-h-[26rem] overflow-y-auto pr-1 custom-scroll"></div>
             </div>
+          </div>
+        </div>
+
+        <!-- ================= TAB: RUN DIAGNOSTICS ================= -->
+        <div id="panelDiag" class="hidden space-y-3.5">
+          <div class="p-3 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] shadow-sm space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-[var(--accent)] text-xs">Run Diagnostics</span>
+              <span id="diagStatBadge" class="text-[9.5px] font-mono px-2 py-0.5 rounded-full font-bold"></span>
+            </div>
+            <p class="text-[10px] text-[var(--text-muted)] leading-relaxed">
+              Quality signals recorded by the pipeline for this dataset. Failed checks mark results that need care when interpreting; they do not mean the run crashed.
+            </p>
+          </div>
+
+          <div id="diagChecks" class="space-y-2"></div>
+
+          <details id="diagWarnBox" class="group bg-[var(--card-bg)] rounded-lg border border-[var(--border-color)] shadow-sm hidden">
+            <summary class="p-3 text-xs font-semibold text-[var(--text-main)] cursor-pointer flex items-center justify-between select-none hover:text-amber-400 transition">
+              <span class="flex items-center gap-1.5"><span>📋</span> Pipeline warnings (<span id="diagWarnCount">0</span>)</span>
+              <span class="text-[10px] text-[var(--text-muted)] group-open:rotate-180 transition-transform">▼</span>
+            </summary>
+            <div id="diagWarnList" class="p-3 pt-0 space-y-2 border-t border-[var(--border-color)]/50 mt-1"></div>
+          </details>
+
+          <div id="diagNone" class="hidden p-3 rounded-lg border border-[var(--border-color)] bg-[var(--chip-bg)] text-[11px] text-[var(--text-muted)]">
+            No run manifest was found for this dataset, so no diagnostics are available. Datasets built before manifests were recorded will show this.
           </div>
         </div>
 
@@ -1083,6 +1175,24 @@
 
         <!-- ================= TAB 3: ROOTING OPTIONS ================= -->
         <div id="panelRooting" class="hidden space-y-4">
+          <!-- Branch ordering: like rooting, it changes presentation only -->
+          <div class="p-3 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] shadow-sm space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-[var(--accent)] text-xs">Branch Order</span>
+              <span id="branchOrderBadge" class="badge-sky text-[9.5px] font-mono px-2 py-0.5 rounded-full font-bold">File order</span>
+            </div>
+            <p class="text-[10px] text-[var(--text-muted)] leading-relaxed">
+              Rotating a node&rsquo;s children changes only how the tree is drawn. Every split, branch length and support value stays identical &mdash; unlike rooting, which changes what the tree asserts about direction.
+            </p>
+            <select id="branchOrderSelect" onchange="setBranchOrder(this.value)" class="w-full bg-[var(--input-bg)] border border-[var(--border-color)] rounded-md px-2.5 py-1.5 text-xs text-[var(--text-main)] font-medium focus:outline-none focus:border-sky-400">
+              <option value="file" selected>As in the tree file</option>
+              <option value="ladder-asc">Ladderise &mdash; smallest clade first</option>
+              <option value="ladder-desc">Ladderise &mdash; largest clade first</option>
+              <option value="alpha">Alphabetical by first tip</option>
+            </select>
+            <p id="branchOrderNote" class="text-[9.5px] text-[var(--text-muted)] leading-snug"></p>
+          </div>
+
           <!-- Rooting Controls -->
           <div class="p-3 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] shadow-sm space-y-2">
             <div class="flex items-center justify-between">
@@ -1512,7 +1622,7 @@
           <div id="minimapTitle" class="absolute top-1 left-2 text-[8.5px] font-mono text-[var(--text-muted)] uppercase tracking-wider pointer-events-none font-bold">RADAR OVERVIEW</div>
         </div>
 
-        <!-- Floating Zoom & Fit Toolbar -->
+        <!-- Floating Zoom, Rotation & Fit Toolbar -->
         <div class="flex items-center space-x-1 bg-[var(--card-bg)] border border-[var(--border-color)] backdrop-blur-md px-2 py-1.5 rounded-xl shadow-xl">
           <button onclick="zoomStep(1.2)" class="w-7 h-7 rounded hover:bg-slate-500/20 text-[var(--text-main)] font-bold text-sm flex items-center justify-center transition" title="Zoom In">+</button>
           <button onclick="zoomStep(0.83)" class="w-7 h-7 rounded hover:bg-slate-500/20 text-[var(--text-main)] font-bold text-sm flex items-center justify-center transition" title="Zoom Out">&minus;</button>
@@ -1523,6 +1633,39 @@
           <button onclick="centerOnSelection()" class="px-2 h-7 rounded hover:bg-slate-500/20 text-sky-400 font-semibold text-xs flex items-center justify-center space-x-1 transition" title="Center on Selected Node">
             <span>🎯 Focus</span>
           </button>
+          <div class="w-px h-4 bg-[var(--border-color)] mx-1"></div>
+          
+          <!-- Tree Rotation Controls in Floating HUD -->
+          <div class="flex items-center space-x-0.5 relative" id="hudRotationGroup">
+            <button onclick="stepTreeRotation(-90)" class="w-7 h-7 rounded hover:bg-slate-500/20 text-[var(--text-muted)] hover:text-[var(--text-main)] font-bold text-xs flex items-center justify-center transition cursor-pointer" title="Rotate tree -90° (Counter-clockwise)">↺</button>
+            <button onclick="stepTreeRotation(90)" class="w-7 h-7 rounded hover:bg-slate-500/20 text-[var(--text-muted)] hover:text-[var(--text-main)] font-bold text-xs flex items-center justify-center transition cursor-pointer" title="Rotate tree +90° (Clockwise)">↻</button>
+            <button id="btnHudRotationBadge" onclick="toggleRotationPopover()" class="px-2 h-7 rounded hover:bg-slate-500/20 text-sky-400 hover:text-sky-300 font-mono text-[11px] font-bold flex items-center justify-center space-x-0.5 transition cursor-pointer" title="Tree Rotation: Click to open slider & presets">
+              <span id="hudRotationVal">0°</span>
+              <span class="text-[9px] text-[var(--text-muted)]">▾</span>
+            </button>
+
+            <!-- Floating Quick-Rotation Popover (anchored above the button) -->
+            <div id="hudRotationPopover" class="hidden absolute bottom-9 right-0 w-60 p-3 rounded-xl bg-[var(--card-bg)] border border-[var(--border-color)] shadow-2xl backdrop-blur-md z-30 space-y-2.5 text-xs animate-in fade-in zoom-in-95 duration-100 select-none">
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="font-bold text-[var(--text-main)] flex items-center space-x-1">
+                  <span>🔄</span><span>Tree Rotation</span>
+                </span>
+                <span id="hudPopoverRotationVal" class="font-mono text-sky-400 font-bold">0°</span>
+              </div>
+              <input type="range" id="hudRotationSlider" min="0" max="360" value="0" oninput="setTreeRotation(this.value)" class="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-sky-400" title="Rotate tree in 360 degrees">
+              <div class="grid grid-cols-4 gap-1 text-[9.5px]">
+                <button onclick="setTreeRotation(0)" class="py-1 px-1 rounded bg-slate-500/10 hover:bg-slate-500/25 text-[var(--text-muted)] hover:text-white border border-[var(--border-color)] text-center transition cursor-pointer" title="0° Standard Right">0° Right</button>
+                <button onclick="setTreeRotation(90)" class="py-1 px-1 rounded bg-slate-500/10 hover:bg-slate-500/25 text-[var(--text-muted)] hover:text-white border border-[var(--border-color)] text-center transition cursor-pointer" title="90° Vertical Down">90° Down</button>
+                <button onclick="setTreeRotation(180)" class="py-1 px-1 rounded bg-slate-500/10 hover:bg-slate-500/25 text-[var(--text-muted)] hover:text-white border border-[var(--border-color)] text-center transition cursor-pointer" title="180° Inverted Left">180° Left</button>
+                <button onclick="setTreeRotation(270)" class="py-1 px-1 rounded bg-slate-500/10 hover:bg-slate-500/25 text-[var(--text-muted)] hover:text-white border border-[var(--border-color)] text-center transition cursor-pointer" title="270° Ascending Up">270° Up</button>
+              </div>
+              <div class="flex items-center justify-between pt-1 border-t border-[var(--border-color)]/60 text-[10px]">
+                <button onclick="setTreeRotation(0); toggleRotationPopover();" class="text-rose-400 hover:text-rose-300 transition cursor-pointer">↺ Reset (0°)</button>
+                <button onclick="toggleRotationPopover()" class="text-[var(--text-muted)] hover:text-white transition cursor-pointer">Close</button>
+              </div>
+            </div>
+          </div>
+
           <div class="w-px h-4 bg-[var(--border-color)] mx-1"></div>
           <button id="btnToggleGrid" onclick="toggleBackgroundGrid()" class="px-2 h-7 rounded hover:bg-slate-500/20 text-[var(--text-muted)] hover:text-[var(--text-main)] font-semibold text-xs flex items-center justify-center space-x-1 transition cursor-pointer" title="Toggle background grid lines">
             <span id="btnToggleGridIcon">🌐</span>
@@ -1746,11 +1889,13 @@
       </div>
     </div>
 
-    <!-- On-Hover Reroot Action Button -->
-    <div class="pt-1.5 border-t border-[var(--border-color)] flex items-center justify-between">
-      <span class="text-[9px] text-[var(--text-muted)]">Evolutionary branch</span>
-      <button id="btnTooltipReroot" onclick="triggerHoverReroot()" class="px-2.5 py-1 rounded-md bg-purple-500/20 hover:bg-purple-500/40 border border-purple-400/50 text-purple-300 font-semibold text-[10px] transition flex items-center space-x-1 shadow-sm">
-        <span>⚓ Reroot Tree Here</span>
+    <!-- On-Hover Reroot & Rotate Action Buttons -->
+    <div class="pt-1.5 border-t border-[var(--border-color)] flex items-center justify-between gap-1.5">
+      <button id="btnTooltipRotateSubtree" onclick="triggerHoverRotateSubtree()" class="px-2 py-1 rounded-md bg-sky-500/20 hover:bg-sky-500/40 border border-sky-400/50 text-sky-300 font-semibold text-[10px] transition flex items-center space-x-1 shadow-sm cursor-pointer" title="Rotate/swap child branch orders at this node">
+        <span>🔄 Rotate Subtree</span>
+      </button>
+      <button id="btnTooltipReroot" onclick="triggerHoverReroot()" class="px-2.5 py-1 rounded-md bg-purple-500/20 hover:bg-purple-500/40 border border-purple-400/50 text-purple-300 font-semibold text-[10px] transition flex items-center space-x-1 shadow-sm cursor-pointer" title="Reroot tree at this evolutionary branch">
+        <span>⚓ Reroot</span>
       </button>
     </div>
   </div>

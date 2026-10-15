@@ -14,7 +14,7 @@ mmCIF input without reporting an error.
 
 import glob
 import os
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 # One residue: [x, y, z, confidence, residue_number, residue_name]
 Residue = List[object]
@@ -202,13 +202,66 @@ def extract_ca_dict(structure_dir: str, verbose: bool = True) -> Dict[str, List[
     return ca_dict
 
 
-def write_ca_bundle(ca_dict: Dict[str, List[Residue]], output_path: str) -> Optional[str]:
-    """Write a C-alpha bundle as the JS asset the interactive viewer loads."""
+def write_ca_bundle(ca_dict: Dict[str, List[Residue]], output_path: str,
+                    dataset_key: Optional[str] = None,
+                    confidence_sidecar: Optional[str] = None) -> Optional[str]:
+    """Write a C-alpha bundle as the JS asset the interactive viewer loads.
+
+    Keyed by dataset. Every report loads the bundles of several runs, and two runs
+    of the same cohort through different structure predictors carry the *same*
+    taxon ids with *different* coordinates. A single flat taxon->coords map meant
+    whichever bundle loaded last silently replaced the others, so a run's own
+    report could render another predictor's backbones throughout.
+
+    Each residue is ``[x, y, z, confidence, resnum, resname]``, with a seventh
+    element carrying LDDT against the search query where a cohort was built by
+    ``viral-phylo search``. The fourth element's *meaning* varies - pLDDT for a
+    prediction, atomic displacement for a crystal structure, on overlapping ranges
+    and opposite polarities - so ``confidence_kind`` travels per taxon in a
+    companion map rather than being inferred from the number.
+    """
     import json
 
     if not ca_dict:
         return None
-    payload = "window.CA_STRUCTURES = Object.assign(window.CA_STRUCTURES || {}, " + json.dumps(ca_dict) + ");\n"
+    key = dataset_key or os.path.basename(os.path.dirname(os.path.abspath(output_path)))
+
+    meta: Dict[str, Any] = {}
+    if confidence_sidecar and os.path.isfile(confidence_sidecar):
+        try:
+            with open(confidence_sidecar, "r", encoding="utf-8") as fh:
+                side = json.load(fh)
+            entries = side.get("entries") or {}
+            for taxon, residues in ca_dict.items():
+                ent = entries.get(taxon)
+                if not ent:
+                    continue
+                meta[taxon] = {
+                    "confidence_kind": ent.get("confidence_kind", "none"),
+                    "structure_kind": ent.get("structure_kind"),
+                    "resolution": ent.get("resolution"),
+                    "lddt_to_query": ent.get("lddt_to_query"),
+                    "source": ent.get("source"),
+                }
+                track = ent.get("lddt_per_residue") or []
+                for i, res in enumerate(residues):
+                    # Residues outside the aligned span carry None, not a zero that
+                    # would read as "no similarity" rather than "not compared".
+                    res.append(track[i] if i < len(track) else None)
+        except (OSError, ValueError, TypeError) as exc:
+            print(f"[CA] Notice: confidence sidecar could not be read ({exc}); "
+                  "writing coordinates without it.")
+            meta = {}
+
+    payload = (
+        "window.CA_STRUCTURES_BY_DATASET = Object.assign(window.CA_STRUCTURES_BY_DATASET || {}, "
+        + json.dumps({key: ca_dict}) + ");\n"
+    )
+    if meta:
+        payload += (
+            "window.CA_META_BY_DATASET = Object.assign(window.CA_META_BY_DATASET || {}, "
+            + json.dumps({key: meta}) + ");\n"
+        )
     with open(output_path, "w", encoding="utf-8") as handle:
         handle.write(payload)
     return output_path

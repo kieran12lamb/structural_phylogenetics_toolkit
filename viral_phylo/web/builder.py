@@ -828,6 +828,176 @@ DATASETS = {
 # Auto-discover custom workflows in results/*
 known_core_datasets = {"1193", "500", "100", "6", "foldmason_500_alignments", "foldmason_alignments", "foldmason_glycoproteins", "viro_3d_structures", "viro_500_glycoproteins", "viro_glycoproteins", "phylogeny_500_results", "phylogeny_results", "nipah_esm_workflow", "glycoprotein_workflow", "rdrp_100_workflow"}
 custom_options_html = []
+def load_cluster_trees(result_dir):
+    """Per-cluster trees, keyed by cluster, for nesting inside a dataset entry.
+
+    These are deliberately *not* registered as top-level DATASETS entries. A
+    cluster is a partition within a run, not a cohort: giving it its own entry
+    would put partitions in the cohort switcher, offer them to the cross-dataset
+    comparability gate, and duplicate per-run diagnostics. Nesting mirrors how
+    ALIGNMENTS_DATA already stores partitions.
+
+    They are also a different analysis from the master tree pruned to the same
+    taxa - inferred from the cluster's own alignment with its own model selection
+    - so the method and support kind travel with each one and the viewer can say
+    which it is showing.
+    """
+    phy = Path(result_dir) / "phylogeny"
+    if not phy.is_dir():
+        return None
+
+    man = load_json_if_exists(Path(result_dir) / "run_manifest.json") or {}
+    jobs = {j.get("cluster"): j for j in
+            (((man.get("trees") or {}).get("cluster_jobs") or {}).get("jobs") or [])}
+    summary = load_json_if_exists(Path(result_dir) / "multi_alignment_summary.json") or {}
+    sizes = {c.get("name"): c.get("taxa_count") for c in (summary.get("clusters") or [])}
+
+    out = {}
+    for d in sorted(p for p in phy.iterdir() if p.is_dir() and p.name.startswith("cluster_")):
+        entry = {}
+        for suffix, key in (("alphafold", "newick_3di"), ("aa", "newick_aa")):
+            hits = sorted(d.glob(f"*_{suffix}.treefile"))
+            if hits:
+                txt = _read_text(hits[0]).strip()
+                if txt:
+                    entry[key] = txt
+        if not entry:
+            continue
+        probe = entry.get("newick_3di") or entry.get("newick_aa") or ""
+        entry["support"] = "SH-aLRT/UFboot" if re.search(r"\)[0-9.]+/[0-9.]+:", probe) else "single value"
+        entry["method"] = "iqtree"
+        entry["taxa"] = sizes.get(d.name) or (jobs.get(d.name) or {}).get("taxa")
+        entry["name"] = d.name
+        out[d.name] = entry
+    return out or None
+
+
+def build_run_diagnostics(result_dir, newick_3di=None, newick_aa=None):
+    """Summarise a run's quality signals from its manifest, as pass/warn/fail checks.
+
+    The manifest already records everything here, but nothing reaches the report, so
+    a run whose whole-set alignment was judged unusable still renders trees that look
+    exactly like sound ones. These checks are what the viewer shows so a reader knows
+    where to be careful.
+    """
+    man = load_json_if_exists(Path(result_dir) / "run_manifest.json")
+    if not man:
+        return None
+
+    checks = []
+
+    def add(key, label, status, detail, implication=None):
+        checks.append({"key": key, "label": label, "status": status,
+                       "detail": detail, "implication": implication})
+
+    # 1. Whole-set alignment usability - computed by the pipeline, never surfaced.
+    fs = ((man.get("alignment") or {}).get("full_set")) or {}
+    if fs.get("usable") is None:
+        add("full_set", "Whole-set alignment", "info", "not assessed")
+    elif fs.get("usable"):
+        add("full_set", "Whole-set alignment", "pass",
+            f"{fs.get('gap_fraction', 0):.1%} gaps, {fs.get('expansion', 0):.2f}x expansion")
+    else:
+        add("full_set", "Whole-set alignment", "fail", fs.get("reason") or "flagged unusable",
+            "Whole-set (master) trees rest on this alignment. Treat their topology as a "
+            "layout, not as inference. Per-cluster trees are unaffected.")
+
+    # 2. Did QC exclusions reach the trees? QC runs inside clustering, so the
+    #    whole-set alignment and master trees never see its verdict.
+    qc = man.get("qc") or {}
+    retained = qc.get("retained")
+    tips = None
+    for nw in (newick_3di, newick_aa):
+        if nw:
+            tips = len({t for t in re.split(r"[(),;]", re.sub(r":[-0-9.eE+]+", "", nw))
+                        if t and not re.match(r"^[\d.]+$", t)})
+            break
+    if retained is not None and tips:
+        if tips > retained:
+            add("qc_applied", "QC exclusions in master trees", "fail",
+                f"{qc.get('excluded_count', tips - retained)} excluded by QC, but master trees carry {tips} tips",
+                "Sequences QC rejected are still present in the whole-set trees.")
+        else:
+            add("qc_applied", "QC exclusions in master trees", "pass", f"{tips} tips, {retained} retained")
+
+    # 3. Stage outcomes
+    stages = man.get("stages") or []
+    failed = [st["name"] for st in stages if st.get("status") == "failed"]
+    skipped = [st["name"] for st in stages if st.get("status") == "skipped"]
+    if failed:
+        add("stages", "Pipeline stages", "fail", f"failed: {', '.join(failed)}")
+    elif skipped:
+        add("stages", "Pipeline stages", "warn", f"skipped: {', '.join(skipped)}")
+    else:
+        add("stages", "Pipeline stages", "pass", f"all {len(stages)} completed")
+
+    # 4. Per-cluster trees
+    cl = man.get("clustering") or {}
+    pct = cl.get("per_cluster_trees") or {}
+    n_fail = len(pct.get("failed") or [])
+    if pct:
+        add("cluster_trees", "Per-cluster trees",
+            "fail" if n_fail else "pass",
+            f"{len(pct.get('ok') or [])} built, {n_fail} failed, {len(pct.get('skipped') or [])} skipped as too small")
+
+    # 5. Clusters kept over the recursion thresholds
+    over3 = cl.get("over_threshold_3di_clusters") or {}
+    overaa = cl.get("aa_over_threshold_clusters") or []
+    if over3 or overaa:
+        add("over_threshold", "Cluster alignment quality", "warn",
+            f"{len(over3)} cluster(s) over 3Di thresholds, {len(overaa)} over AA thresholds",
+            "Those clusters' trees rest on gappier alignments than the rest.")
+    elif pct:
+        add("over_threshold", "Cluster alignment quality", "pass", "all within thresholds")
+
+    # 6. Preflight
+    pf = man.get("preflight") or {}
+    blockers, pfw = pf.get("blockers") or [], pf.get("warnings") or []
+    if blockers:
+        add("preflight", "Preflight", "fail", f"{len(blockers)} blocker(s)")
+    elif pfw:
+        add("preflight", "Preflight", "warn", "; ".join(str(w)[:90] for w in pfw[:2]))
+    else:
+        add("preflight", "Preflight", "pass", "no blockers or warnings")
+
+    # 7. Trees the pipeline itself marked as resting on a rejected alignment
+    masters = ((man.get("trees") or {}).get("master")) or []
+    marked = [m for m in masters if m.get("alignment_usable") is False]
+    if marked:
+        add("master_marked", "Whole-set trees marked", "warn",
+            f"{len(marked)} of {len(masters)} master tree(s) flagged by the pipeline",
+            marked[0].get("interpretation") or "Built on an alignment that failed the usability gate.")
+
+    # 8. What the support values actually are
+    sup = {str(m.get("support")) for m in masters if m.get("support")}
+    if sup:
+        local = any("SH-like" in x or "local" in x for x in sup)
+        add("support", "Master tree support", "warn" if local else "pass",
+            "; ".join(sorted(sup))[:110],
+            "SH-like local support is an approximation, not a bootstrap, and tends to read "
+            "optimistically." if local else None)
+
+    # 9. Reproducibility
+    pkg = (man.get("versions") or {}).get("package") or {}
+    if pkg.get("git_dirty"):
+        add("reproducible", "Code state", "warn",
+            f"uncommitted changes at {str(pkg.get('git_commit'))[:8]}",
+            "The working tree differed from the recorded commit, so this run is not "
+            "reproducible from that commit alone.")
+    elif pkg.get("git_commit"):
+        add("reproducible", "Code state", "pass", f"clean at {str(pkg.get('git_commit'))[:8]}")
+
+    order = {"fail": 0, "warn": 1, "info": 2, "pass": 3}
+    checks.sort(key=lambda c: order.get(c["status"], 9))
+    return {
+        "status": man.get("status"),
+        "duration_s": man.get("duration_s"),
+        "warnings": man.get("warnings") or [],
+        "counts": {k: sum(1 for c in checks if c["status"] == k) for k in ("pass", "warn", "fail", "info")},
+        "checks": checks,
+    }
+
+
 for d in _iter_result_dirs(results_dir):
     if not d.is_dir() or d.name.startswith(".") or d.name in known_core_datasets:
         continue
@@ -930,7 +1100,9 @@ for d in _iter_result_dirs(results_dir):
         "silhouette_esm2": custom_sil_esm2,
         "silhouette_3di": custom_sil_3di,
         "silhouette_aa": custom_sil_aa,
-        "esm2_umap": custom_umap
+        "esm2_umap": custom_umap,
+        "diagnostics": build_run_diagnostics(d, newick_3di, newick_aa),
+        "cluster_trees": load_cluster_trees(d),
     }
     custom_options_html.append(f'              <option value="{key}">{title}</option>')
     print(f"Auto-registered custom dataset in DATASETS: {key} -> {title}")
@@ -940,38 +1112,16 @@ extra_scale_options = "\n".join(custom_options_html)
 
 
 def build_interactive_tree(repo_dir: Path = None, results_dir: Path = None):
-    """Compile datasets and generate all interactive tree HTML targets."""
+    """Compile datasets and generate the single global interactive dashboard in results/."""
     if repo_dir is None:
         repo_dir = Path(__file__).resolve().parent.parent.parent
     if results_dir is None:
         results_dir = repo_dir / "results"
 
+    results_dir.mkdir(parents=True, exist_ok=True)
     html_content = assemble_html(datasets_json, tool_version_str, extra_scale_options)
 
-    # Write to destination HTML files
-    targets = [
-        repo_dir / "interactive_tree.html",
-        results_dir / "interactive_tree.html",
-        results_dir / "nipah_esm_workflow/interactive_tree.html",
-        results_dir / "glycoprotein_workflow/phylogeny/interactive_tree.html",
-        results_dir / "rdrp_100_workflow/interactive_tree.html",
-    ]
-
-    # Auto-add targets for all discovered custom workflows
-    for d in _iter_result_dirs(results_dir):
-        if not d.is_dir() or d.name.startswith(".") or d.name in known_core_datasets:
-            continue
-        phy = d / "phylogeny"
-        if phy.exists() and list(phy.glob("*.treefile")):
-            targets.append(d / "interactive_tree.html")
-
-    extra_dir = os.environ.get("ANTIGRAVITY_ARTIFACT_DIR")
-    if extra_dir and Path(extra_dir).exists():
-        targets.append(Path(extra_dir) / "interactive_tree.html")
-
-    # Deduplicate targets
-    targets = sorted(list(set(targets)))
-
+    # Core shared support files located in results_dir
     support_files = [
         "ca_500_structures.js",
         "ca_1193_structures.js",
@@ -980,76 +1130,62 @@ def build_interactive_tree(repo_dir: Path = None, results_dir: Path = None):
         "alignments_data.js",
     ]
 
-    # Ensure repo_dir has all support files from results_dir
+    script_lines = [
+        "  <!-- Pre-cached 3D C-alpha Backbone coordinates & MSA Alignments (Master Reference Assets) -->"
+    ]
     for sf in support_files:
-        src = results_dir / sf
-        dst_repo = repo_dir / sf
-        if src.exists() and not dst_repo.exists():
-            try:
-                shutil.copy2(src, dst_repo)
-            except Exception:
-                pass
-
-    for t in targets:
-        t.parent.mkdir(parents=True, exist_ok=True)
-        out_html = html_content
-
-        # 1. Ensure target directory has local copies of all support files
-        for sf in support_files:
-            src = results_dir / sf
-            dst = t.parent / sf
-            if src.exists() and not dst.exists():
-                try:
-                    shutil.copy2(src, dst)
-                except Exception:
-                    pass
-
-        # 2. Compute relative prefix to results_dir
-        try:
-            rel_results = os.path.relpath(results_dir, t.parent).replace("\\", "/")
-            if rel_results == ".":
-                prefix = ""
-            else:
-                prefix = rel_results.rstrip("/") + "/"
-        except Exception:
-            prefix = ""
-
-        # 3. Build script tags with local direct and relative fallbacks
-        script_lines = [
-            "  <!-- Pre-cached 3D C-alpha Backbone coordinates & MSA Alignments (local + relative resolution) -->"
-        ]
-        for sf in support_files:
+        if (results_dir / sf).exists():
             script_lines.append(f'  <script src="{sf}"></script>')
-        if prefix:
-            for sf in support_files:
-                script_lines.append(f'  <script src="{prefix}{sf}"></script>')
 
-        data_scripts_str = "\n".join(script_lines)
-        out_html = out_html.replace("<!-- DATA_SCRIPTS_PLACEHOLDER -->", data_scripts_str)
+    # Auto-link custom workflow backbones from their respective results subdirectories
+    custom_scripts = []
+    for d in _iter_result_dirs(results_dir):
+        if not d.is_dir() or d.name.startswith("."):
+            continue
+        ca_file = d / "ca_structures.js"
+        if ca_file.exists():
+            custom_scripts.append(f'  <script src="{d.name}/ca_structures.js"></script>')
 
-        # 4. Set appropriate active scale if located inside a specific workflow folder
-        target_str = str(t)
-        matched_scale = None
-        if "rdrp_100_workflow" in target_str:
-            matched_scale = "100"
-        elif "glycoprotein_workflow" in target_str:
-            matched_scale = "6"
-        else:
-            for k in DATASETS.keys():
-                if k in target_str:
-                    matched_scale = k
-                    break
+    if custom_scripts:
+        script_lines.append("  <!-- Discovered Workflow C-alpha Backbone Structures -->")
+        script_lines.extend(custom_scripts)
 
-        if matched_scale and matched_scale != "1193":
-            out_html = out_html.replace('let currentScale = "1193";', f'let currentScale = "{matched_scale}";')
-            out_html = out_html.replace('<option value="1193" selected>', '<option value="1193">')
-            out_html = out_html.replace(f'<option value="{matched_scale}">', f'<option value="{matched_scale}" selected>')
+    data_scripts_str = "\n".join(script_lines)
+    out_html = html_content.replace("<!-- DATA_SCRIPTS_PLACEHOLDER -->", data_scripts_str)
 
-        with open(t, "w", encoding="utf-8") as f:
+    # 1. Primary target: results/interactive_tree.html
+    primary_html = results_dir / "interactive_tree.html"
+    with open(primary_html, "w", encoding="utf-8") as f:
+        f.write(out_html)
+    print(f"Generated global dashboard: {primary_html} ({len(out_html)} bytes)")
+
+    # 2. Web root alias: results/index.html (symlink or copy)
+    index_html = results_dir / "index.html"
+    try:
+        if index_html.is_symlink() or index_html.exists():
+            index_html.unlink()
+        index_html.symlink_to("interactive_tree.html")
+    except OSError:
+        with open(index_html, "w", encoding="utf-8") as f:
             f.write(out_html)
-        print(f"Generated: {t} ({len(out_html)} bytes)")
 
-    print("=== Successfully generated Dynamic Metadata Interactive Tree Suite ===")
+    # 3. Convenience symlink from repo root
+    root_link = repo_dir / "interactive_tree.html"
+    try:
+        if root_link.is_symlink() or root_link.exists():
+            root_link.unlink()
+        rel_target = os.path.relpath(primary_html, repo_dir)
+        root_link.symlink_to(rel_target)
+    except OSError:
+        pass
+
+    # 4. Optional IDE artifact output
+    extra_dir = os.environ.get("ANTIGRAVITY_ARTIFACT_DIR")
+    if extra_dir and Path(extra_dir).exists():
+        with open(Path(extra_dir) / "interactive_tree.html", "w", encoding="utf-8") as f:
+            f.write(out_html)
+
+    print("=== Successfully generated Single Global Interactive Tree Dashboard ===")
 
 
 def main():

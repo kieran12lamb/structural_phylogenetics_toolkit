@@ -383,9 +383,20 @@ def choose_default_color_column(column_specs):
     return cat_specs[0]["key"]
 
 
-def parse_metadata(metadata_source=None, structure_dir=None, candidate_ids=None):
+def parse_metadata(metadata_source=None, structure_dir=None, candidate_ids=None,
+                   extra_fields=None):
     """Main entry point: loads metadata from any format or extracts it from structures.
-    
+
+    ``extra_fields`` is an optional ``{taxon_id: {field: value}}`` mapping folded
+    into each record *before* the schema is classified - taxonomy and host
+    annotation from a search cohort, say. Merging early rather than appending
+    finished columns afterwards matters: ``classify_columns`` is what assigns each
+    categorical column its colour map and cardinality, and
+    ``choose_default_color_column`` is what picks a sensible initial colouring.
+    Columns bolted on after the fact have neither, which leaves clade halos drawn
+    in a default grey at 7% opacity - invisible - and can default the view to a
+    column with hundreds of categories.
+
     Returns:
       {
         "taxa": { taxon_id: { ...fields... } },
@@ -410,12 +421,31 @@ def parse_metadata(metadata_source=None, structure_dir=None, candidate_ids=None)
         print(f"[Metadata] No metadata file provided. Extracting structural metrics from '{structure_dir}'...")
         raw_records = extract_metadata_from_structures(structure_dir)
 
+    if not raw_records and extra_fields:
+        # Nothing but the extra fields: still worth a table, keyed by their ids.
+        raw_records = [{"id": k, **v} for k, v in extra_fields.items()]
+
     if not raw_records:
         return {"taxa": {}, "columns": [], "default_color_col": None}
 
     # Identify ID column
     id_col = find_best_id_column(raw_records, candidate_ids)
     print(f"[Metadata] Identified ID column: '{id_col}' ({len(raw_records)} records).")
+
+    if extra_fields:
+        merged = 0
+        for r in raw_records:
+            tid = str(r.get(id_col, "")).strip()
+            add = extra_fields.get(tid)
+            if not add:
+                continue
+            for k, v in add.items():
+                if v is None or v == "":
+                    continue
+                r.setdefault(k, v)   # a supplied metadata file wins over enrichment
+            merged += 1
+        print(f"[Metadata] Folded enrichment into {merged}/{len(raw_records)} record(s) "
+              f"before schema classification.")
 
     # Classify schema
     column_specs = classify_columns(raw_records, id_col)

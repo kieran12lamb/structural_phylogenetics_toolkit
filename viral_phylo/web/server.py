@@ -86,7 +86,10 @@ class InteractiveBridgeHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
 
         if parsed.path in ("/", "/index.html"):
-            self.path = "/interactive_tree.html"
+            if (REPO_DIR / "results/interactive_tree.html").exists():
+                self.path = "/results/interactive_tree.html"
+            else:
+                self.path = "/interactive_tree.html"
             return super().do_GET()
 
         if parsed.path == "/api/status":

@@ -526,6 +526,8 @@
       cladeSectors: true,
       branchWidth: 1.4,
       colorBranchesBySupport: false,
+      inheritSupportColorToTips: true,
+      branchOrder: "file",
       supportMetric: "ufboot",
       supportPalette: "traffic",
       showGrid: true,
@@ -660,8 +662,12 @@
     }
 
     function parseAllActiveTrees() {
-      rawTrees["3di"] = parseNewick(NEWICK_3DI);
-      rawTrees["aa"] = parseNewick(NEWICK_AA);
+      // A cluster with its own tree supplies the 3Di and AA roots in place of the
+      // whole-set ones. The ESM-2 trees stay whole-set: embeddings are computed per
+      // run, not per cluster, so there is no cluster-level counterpart to swap in.
+      const ct = (typeof getActiveClusterTree === "function") ? getActiveClusterTree() : null;
+      rawTrees["3di"] = parseNewick((ct && ct.newick_3di) || NEWICK_3DI);
+      rawTrees["aa"] = parseNewick((ct && ct.newick_aa) || NEWICK_AA);
       delete rawTrees["esm2_cosine"];
       delete rawTrees["esm2_euclidean"];
       delete rawTrees["esm2_l1"];
@@ -1000,6 +1006,92 @@
     }
 
     // Apply active rooting mode
+    // =========================================================================
+    // BRANCH ORDERING (LADDERISATION)
+    //
+    // Reordering a node's children changes only how the tree is drawn, never what
+    // it asserts: the set of splits is identical whichever way each node is
+    // rotated. Ladderising makes nested structure legible by putting the small
+    // side consistently on one edge; alphabetical ordering makes a named tip easy
+    // to find. Neither is a claim about evolution, so the original file order is
+    // kept available to return to.
+    // =========================================================================
+    const BRANCH_ORDERS = {
+      "file": "As in the tree file",
+      "ladder-asc": "Ladderised \u2014 smallest clade first",
+      "ladder-desc": "Ladderised \u2014 largest clade first",
+      "alpha": "Alphabetical by first tip"
+    };
+
+    function tagOriginalOrder(node) {
+      if (!node || !node.children) return;
+      node.children.forEach((c, i) => {
+        if (c._ord === undefined) c._ord = i;
+        c._parent = node;
+        tagOriginalOrder(c);
+      });
+    }
+
+    function subtreeLeafCount(node) {
+      if (!node) return 0;
+      if (node._leafCount !== undefined) return node._leafCount;
+      const n = (!node.children || node.children.length === 0)
+        ? 1 : node.children.reduce((a, c) => a + subtreeLeafCount(c), 0);
+      node._leafCount = n;
+      return n;
+    }
+
+    function firstTipName(node) {
+      if (!node) return "";
+      if (node._firstTip !== undefined) return node._firstTip;
+      let v;
+      if (!node.children || node.children.length === 0) v = String(node.name || "");
+      else v = node.children.map(firstTipName).filter(Boolean).sort()[0] || "";
+      node._firstTip = v;
+      return v;
+    }
+
+    function clearOrderCaches(node) {
+      if (!node) return;
+      delete node._leafCount;
+      delete node._firstTip;
+      if (node.children) node.children.forEach(clearOrderCaches);
+    }
+
+    function applyBranchOrder(root, mode) {
+      if (!root) return root;
+      mode = mode || "file";
+      tagOriginalOrder(root);
+      clearOrderCaches(root);
+      const byOrd = (a, b) => (a._ord || 0) - (b._ord || 0);
+      const cmp = {
+        "file": byOrd,
+        "ladder-asc": (a, b) => subtreeLeafCount(a) - subtreeLeafCount(b) || byOrd(a, b),
+        "ladder-desc": (a, b) => subtreeLeafCount(b) - subtreeLeafCount(a) || byOrd(a, b),
+        "alpha": (a, b) => String(firstTipName(a)).localeCompare(String(firstTipName(b))) || byOrd(a, b)
+      }[mode];
+      if (!cmp) return root;
+      (function walk(n) {
+        if (!n || !n.children || n.children.length === 0) return;
+        n.children.forEach(walk);
+        n.children.sort(cmp);
+      })(root);
+      clearOrderCaches(root);
+      return root;
+    }
+
+    function setBranchOrder(mode) {
+      settings.branchOrder = mode || "file";
+      const note = document.getElementById("branchOrderNote");
+      if (note) note.textContent = BRANCH_ORDERS[settings.branchOrder] || "";
+      const badge = document.getElementById("branchOrderBadge");
+      if (badge) {
+        badge.textContent = { "file": "File order", "ladder-asc": "Ladder \u2191",
+                              "ladder-desc": "Ladder \u2193", "alpha": "A \u2192 Z" }[settings.branchOrder] || "File order";
+      }
+      if (typeof applyCurrentRooting === "function") applyCurrentRooting();
+    }
+
     function applyCurrentRooting() {
       let baseRoot = rawRoot3Di;
       if (settings.dataset === "aa") {
@@ -1051,6 +1143,10 @@
         document.getElementById("metricFarthest").textContent = `${n1} ↔ ${n2}`;
       }
 
+      // Presentational only, so it runs last - after rooting and any pruning -
+      // and is reapplied on every rooting change rather than baked into the tree.
+      applyBranchOrder(activeTreeRoot, settings.branchOrder);
+
       renderTree();
       fitTreeToScreen(true);
       updateCladeManagementUI();
@@ -1100,6 +1196,56 @@
       renderTree();
       fitTreeToScreen(true);
       showCladeToast(`Tree rerooted at ${pendingHoverNode.name || "selected edge"}!`);
+    }
+
+    function rotateSubtreeNode(node) {
+      if (!node || !node.children || node.children.length <= 1) return;
+      node.children.reverse();
+      assignDepths(activeTreeRoot, 0);
+      renderTree();
+      updateMinimap();
+      showCladeToast(`Rotated branches at ${node.name || "internal clade"}`);
+    }
+
+    function triggerHoverRotateSubtree() {
+      if (!pendingHoverNode) return;
+      const target = (pendingHoverNode.children && pendingHoverNode.children.length > 1)
+        ? pendingHoverNode
+        : (pendingHoverNode.parent && pendingHoverNode.parent.children && pendingHoverNode.parent.children.length > 1 ? pendingHoverNode.parent : null);
+      if (target) {
+        rotateSubtreeNode(target);
+        hideTooltipImmediate();
+      }
+    }
+
+    function rotateCladeByCutId(cladeId) {
+      const clades = getCladesForCurrentCut();
+      const c = clades.find(item => item.id === cladeId);
+      if (!c || !c.taxa || c.taxa.length === 0) return;
+      const taxaSet = new Set(c.taxa);
+
+      function findLca(node) {
+        if (!node) return null;
+        const leaves = getAllLeaves(node).map(l => l.name);
+        const inSet = leaves.filter(name => taxaSet.has(name)).length;
+        if (inSet === taxaSet.size) {
+          if (node.children) {
+            for (const child of node.children) {
+              const res = findLca(child);
+              if (res) return res;
+            }
+          }
+          return node;
+        }
+        return null;
+      }
+
+      const lca = findLca(activeTreeRoot);
+      if (lca && lca.children && lca.children.length > 1) {
+        rotateSubtreeNode(lca);
+      } else {
+        showCladeToast(`Could not find rotatable clade node for ${c.name}`);
+      }
     }
 
     // 4. CLADE COLLAPSE & CLASSIFICATION ENGINE
@@ -1779,7 +1925,10 @@
                 <span>Scope Entire Analysis</span>
               </button>
             `}
-            <button onclick="highlightCladeTaxaByIndex(${c.id})" class="py-1 px-2.5 rounded bg-[var(--chip-bg)] hover:bg-slate-500/20 text-[var(--text-main)] border border-[var(--border-color)] text-[10px] font-medium transition cursor-pointer" title="Highlight this clade in current view without filtering others">
+            <button onclick="rotateCladeByCutId(${c.id})" class="py-1 px-2 rounded bg-[var(--chip-bg)] hover:bg-slate-500/20 text-[var(--text-main)] border border-[var(--border-color)] text-[10px] font-medium transition cursor-pointer flex items-center space-x-1" title="Rotate/swap branches of this clade">
+              <span>🔄</span><span>Rotate</span>
+            </button>
+            <button onclick="highlightCladeTaxaByIndex(${c.id})" class="py-1 px-2 rounded bg-[var(--chip-bg)] hover:bg-slate-500/20 text-[var(--text-main)] border border-[var(--border-color)] text-[10px] font-medium transition cursor-pointer" title="Highlight this clade in current view without filtering others">
               👁️ View
             </button>
           </div>
@@ -2623,12 +2772,285 @@
       }
     }
 
+
+    // C-alpha backbones are keyed by dataset: a report loads several runs' bundles,
+    // and two predictors over the same cohort reuse taxon ids for different
+    // coordinates. Older bundles are still flat, so fall back to those.
+    function getCAStore(scale) {
+      const byDs = window.CA_STRUCTURES_BY_DATASET || {};
+      const key = scale || (typeof currentScale !== "undefined" ? currentScale : null);
+      if (key && byDs[key]) return byDs[key];
+      return window.CA_STRUCTURES || {};
+    }
+
+    // Which datasets actually carry their own backbones, for comparison mode.
+    function datasetsWithBackbones() {
+      return Object.keys(window.CA_STRUCTURES_BY_DATASET || {});
+    }
+
+
+    // =========================================================================
+    // RUN DIAGNOSTICS
+    // The pipeline records quality verdicts it never surfaced - most importantly
+    // whether the whole-set alignment was judged usable at all. A dataset whose
+    // alignment failed that gate still renders trees indistinguishable from sound
+    // ones, so the checks are shown here rather than left in the manifest.
+    // =========================================================================
+    const DIAG_STYLE = {
+      fail: { ring: "border-rose-500/50 bg-rose-500/10",   chip: "bg-rose-500/20 text-rose-300",       icon: "✕", label: "FAIL" },
+      warn: { ring: "border-amber-500/40 bg-amber-500/10", chip: "bg-amber-500/20 text-amber-300",     icon: "!", label: "WARN" },
+      pass: { ring: "border-[var(--border-color)] bg-[var(--chip-bg)]", chip: "bg-emerald-500/20 text-emerald-300", icon: "✓", label: "PASS" },
+      info: { ring: "border-[var(--border-color)] bg-[var(--chip-bg)]", chip: "bg-slate-500/20 text-slate-300",     icon: "i", label: "INFO" }
+    };
+
+    function getActiveDiagnostics() {
+      const ds = activeDataset || getActiveDataset();
+      return (ds && ds.diagnostics) || null;
+    }
+
+    function updateDiagnosticsUI() {
+      const d = getActiveDiagnostics();
+      const box = document.getElementById("diagChecks");
+      const none = document.getElementById("diagNone");
+      const stat = document.getElementById("diagStatBadge");
+      const badge = document.getElementById("tabDiagBadge");
+      const warnBox = document.getElementById("diagWarnBox");
+
+      if (!d) {
+        if (box) box.innerHTML = "";
+        if (none) none.classList.remove("hidden");
+        if (warnBox) warnBox.classList.add("hidden");
+        if (stat) { stat.textContent = "no manifest"; stat.className = "text-[9.5px] font-mono px-2 py-0.5 rounded-full font-bold bg-slate-500/20 text-slate-300"; }
+        if (badge) { badge.textContent = "–"; badge.className = "text-[7.5px] font-mono px-0.5 rounded-full bg-slate-500/20 text-slate-400"; }
+        return;
+      }
+      if (none) none.classList.add("hidden");
+
+      const c = d.counts || {};
+      const bad = (c.fail || 0), warn = (c.warn || 0);
+      if (stat) {
+        stat.textContent = bad ? `${bad} failed, ${warn} warn` : (warn ? `${warn} warning(s)` : "all checks passed");
+        stat.className = "text-[9.5px] font-mono px-2 py-0.5 rounded-full font-bold " +
+          (bad ? "bg-rose-500/20 text-rose-300" : warn ? "bg-amber-500/20 text-amber-300" : "bg-emerald-500/20 text-emerald-300");
+      }
+      if (badge) {
+        badge.textContent = bad ? String(bad) : (warn ? String(warn) : "0");
+        badge.className = "text-[7.5px] font-mono px-0.5 rounded-full " +
+          (bad ? "bg-rose-500/30 text-rose-300" : warn ? "bg-amber-500/25 text-amber-300" : "bg-emerald-500/20 text-emerald-400");
+      }
+
+      if (box) {
+        box.innerHTML = "";
+        (d.checks || []).forEach(function (chk) {
+          const st = DIAG_STYLE[chk.status] || DIAG_STYLE.info;
+          const el = document.createElement("div");
+          el.className = `p-2.5 rounded-lg border ${st.ring} space-y-1`;
+          el.innerHTML =
+            '<div class="flex items-start justify-between gap-2">' +
+              `<span class="font-semibold text-[11.5px] text-[var(--text-main)]">${escapeHtmlDiag(chk.label)}</span>` +
+              `<span class="shrink-0 text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${st.chip}">${st.icon} ${st.label}</span>` +
+            '</div>' +
+            `<div class="text-[10px] text-[var(--text-muted)] font-mono leading-snug">${escapeHtmlDiag(chk.detail || "")}</div>` +
+            (chk.implication
+              ? `<div class="text-[10px] text-[var(--text-main)] leading-snug border-l-2 border-[var(--border-color)] pl-2 mt-1">${escapeHtmlDiag(chk.implication)}</div>`
+              : "");
+          box.appendChild(el);
+        });
+      }
+
+      const ws = d.warnings || [];
+      const wl = document.getElementById("diagWarnList");
+      const wc = document.getElementById("diagWarnCount");
+      if (warnBox) warnBox.classList.toggle("hidden", ws.length === 0);
+      if (wc) wc.textContent = ws.length;
+      if (wl) {
+        wl.innerHTML = "";
+        ws.forEach(function (w) {
+          const el = document.createElement("div");
+          el.className = "text-[10px] text-[var(--text-muted)] leading-snug border-l-2 border-amber-500/40 pl-2";
+          el.textContent = w;
+          wl.appendChild(el);
+        });
+      }
+    }
+
+    function escapeHtmlDiag(x) {
+      return String(x == null ? "" : x)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+
+
+    // Structure confidence can be on three different scales, so the colouring has
+    // to know which one it is looking at. pLDDT runs 0-100 and higher is better;
+    // a crystal structure's B-factor occupies an overlapping numeric range in the
+    // same slot but higher is worse; and a structure written from search
+    // coordinates alone has no confidence at all. LDDT against the search query is
+    // the one scale that means the same thing for all of them, so it is the default
+    // where a cohort has it.
+    const structureColorState = { mode: "auto" };   // auto | native | lddt | none
+
+    function getCAMeta(scale, taxon) {
+      const byDs = window.CA_META_BY_DATASET || {};
+      const key = scale || (typeof currentScale !== "undefined" ? currentScale : null);
+      const forDs = (key && byDs[key]) || null;
+      if (!forDs) return null;
+      return taxon ? (forDs[taxon] || null) : forDs;
+    }
+
+    function datasetHasLddt(scale) {
+      const m = getCAMeta(scale);
+      if (!m) return false;
+      for (const k in m) if (m[k] && m[k].lddt_to_query != null) return true;
+      return false;
+    }
+
+    function resolveStructureColorMode(taxon) {
+      const want = structureColorState.mode;
+      const meta = getCAMeta(null, taxon);
+      const hasLddt = meta && meta.lddt_to_query != null;
+      const kind = (meta && meta.confidence_kind) || "plddt";   // legacy bundles are pLDDT
+      if (want === "lddt") return hasLddt ? "lddt" : "none";
+      if (want === "native") return kind === "none" ? "none" : kind;
+      return hasLddt ? "lddt" : (kind === "none" ? "none" : kind);
+    }
+
+    // One ramp per scale. LDDT and pLDDT share a direction (higher is better) but
+    // not a range; B-factor is inverted, so it gets its own ramp rather than being
+    // rescaled onto a confidence one, which would imply a comparability it lacks.
+    function structureResidueColor(mode, value) {
+      if (value == null) return "#64748b";            // not measured here
+      if (mode === "lddt") {
+        if (value >= 0.8) return "#2563eb";
+        if (value >= 0.6) return "#38bdf8";
+        if (value >= 0.4) return "#facc15";
+        return "#f97316";
+      }
+      if (mode === "bfactor") {                       // lower is better - inverted
+        if (value <= 20) return "#2563eb";
+        if (value <= 40) return "#38bdf8";
+        if (value <= 60) return "#facc15";
+        return "#f97316";
+      }
+      if (mode === "plddt") {
+        if (value >= 90) return "#2563eb";
+        if (value >= 70) return "#38bdf8";
+        if (value >= 50) return "#facc15";
+        return "#f97316";
+      }
+      return "#64748b";
+    }
+
+    function setStructureColorMode(mode) {
+      structureColorState.mode = mode || "auto";
+      updateStructureColorNote();
+      if (typeof renderTree === "function") renderTree();
+      if (typeof selectTaxon === "function" && settings.selectedTaxon) {
+        selectTaxon(settings.selectedTaxon);
+      }
+    }
+
+    function updateStructureColorNote() {
+      const note = document.getElementById("structColorNote");
+      if (!note) return;
+      const hasLddt = datasetHasLddt();
+      const sel = document.getElementById("structColorSelect");
+      if (sel) sel.value = structureColorState.mode;
+      if (structureColorState.mode === "lddt" && !hasLddt) {
+        note.textContent = "No LDDT for this dataset - build it with viral-phylo search. Showing uniform colour.";
+      } else if (hasLddt) {
+        note.textContent = "LDDT to the search query means the same for predicted and experimental structures, so it is comparable across the cohort.";
+      } else {
+        note.textContent = "Native confidence only. pLDDT is higher-is-better; a crystal B-factor is lower-is-better, and the two are never mixed on one ramp.";
+      }
+    }
+
+
+    // Picking an alignment partition can show that cluster's OWN tree rather than
+    // the whole-set tree pruned to the same taxa. They are different analyses: the
+    // cluster tree was inferred from the cluster's alignment with its own model
+    // selection, so its topology and support can legitimately differ from the
+    // master's. Which one is on screen is therefore stated, never substituted
+    // silently, and the master is used where a cluster has no tree of its own.
+    // var, not const: parseAllActiveTrees() runs during init long before this line,
+    // and a const read from its temporal dead zone throws rather than reading as
+    // undefined. var hoists, so the read below sees undefined and falls through.
+    var clusterTreeState = { use: true };
+
+    function getClusterTrees(scale) {
+      const ds = (scale ? DATASETS[scale] : (activeDataset || getActiveDataset())) || {};
+      return ds.cluster_trees || null;
+    }
+
+    // msaState is a const declared much later in the file, and parseAllActiveTrees
+    // runs during init before that line executes. `typeof msaState` does NOT make
+    // that safe: on a let/const in its temporal dead zone typeof throws
+    // ReferenceError rather than returning "undefined", which aborted
+    // initialisation and left the page with no tree at all. Mirror the value into
+    // a plain var declared up here instead, and read that.
+    var activeMsaPartition = "all";
+
+    function currentPartitionKey() {
+      try {
+        if (msaState && msaState.activePartition) return msaState.activePartition;
+      } catch (e) { /* msaState not initialised yet */ }
+      return activeMsaPartition || "all";
+    }
+
+    function getActiveClusterTree() {
+      if (!clusterTreeState || !clusterTreeState.use) return null;
+      const part = currentPartitionKey();
+      if (part === "all") return null;
+      const all = getClusterTrees();
+      return (all && all[part]) || null;
+    }
+
+    function activeTreeProvenance() {
+      const part = currentPartitionKey();
+      if (part === "all") return { kind: "master", label: "Whole-set tree" };
+      const ct = getActiveClusterTree();
+      if (ct) {
+        return { kind: "cluster", label: `${part} tree`, support: ct.support,
+                 method: ct.method, taxa: ct.taxa };
+      }
+      const all = getClusterTrees();
+      return { kind: "master-pruned",
+               label: "Whole-set tree, pruned",
+               reason: all ? "this cluster has no tree of its own" : "no per-cluster trees in this run" };
+    }
+
+    function updateTreeProvenanceBadge() {
+      const el = document.getElementById("treeProvenanceBadge");
+      if (!el) return;
+      const p = activeTreeProvenance();
+      if (p.kind === "master") { el.classList.add("hidden"); return; }
+      el.classList.remove("hidden");
+      if (p.kind === "cluster") {
+        el.textContent = `${p.label} \u00b7 ${p.method || "iqtree"} \u00b7 ${p.support || ""}`.trim();
+        el.className = "text-[9px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40";
+        el.title = "Showing this cluster's own tree, inferred from its own alignment.";
+      } else {
+        el.textContent = p.label;
+        el.className = "text-[9px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40";
+        el.title = `The whole-set tree filtered to these taxa - ${p.reason}. Topology and support come from the whole-set analysis, not this cluster.`;
+      }
+    }
+
+    function setUseClusterTrees(on) {
+      if (!clusterTreeState) clusterTreeState = { use: true };
+      clusterTreeState.use = !!on;
+      if (typeof parseAllActiveTrees === "function") parseAllActiveTrees();
+      if (typeof applyCurrentRooting === "function") applyCurrentRooting();
+      updateTreeProvenanceBadge();
+      if (typeof renderTree === "function") renderTree();
+    }
+
     function switchSidebarTab(tabName) {
-      ["panelDisplay", "panelFilter", "panelCuts", "panelAlign", "panelClades", "panelRooting", "panelPipeline"].forEach(id => {
+      ["panelDisplay", "panelFilter", "panelCuts", "panelAlign", "panelClades", "panelRooting", "panelPipeline", "panelDiag"].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add("hidden");
       });
-      ["tabBtnDisplay", "tabBtnFilter", "tabBtnCuts", "tabBtnAlign", "tabBtnClades", "tabBtnRooting", "tabBtnPipeline"].forEach(id => {
+      ["tabBtnDisplay", "tabBtnFilter", "tabBtnCuts", "tabBtnAlign", "tabBtnClades", "tabBtnRooting", "tabBtnPipeline", "tabBtnDiag"].forEach(id => {
         const btn = document.getElementById(id);
         if (btn) {
           btn.className = "flex-1 py-1.5 text-center font-medium text-[var(--text-muted)] hover:text-[var(--text-main)] border-b-2 border-transparent transition flex flex-col items-center justify-center leading-tight";
@@ -2657,6 +3079,10 @@
       } else if (tabName === "rooting") {
         document.getElementById("panelRooting").classList.remove("hidden");
         document.getElementById("tabBtnRooting").className = "flex-1 py-1.5 text-center font-bold text-sky-400 border-b-2 border-sky-400 transition flex flex-col items-center justify-center leading-tight";
+      } else if (tabName === "diag") {
+        document.getElementById("panelDiag").classList.remove("hidden");
+        document.getElementById("tabBtnDiag").className = "flex-1 py-1.5 text-center font-bold text-rose-400 border-b-2 border-rose-400 transition flex flex-col items-center justify-center leading-tight";
+        updateDiagnosticsUI();
       } else if (tabName === "pipeline") {
         document.getElementById("panelPipeline").classList.remove("hidden");
         document.getElementById("tabBtnPipeline").className = "flex-1 py-1.5 text-center font-bold text-amber-400 border-b-2 border-amber-400 transition flex flex-col items-center justify-center leading-tight";
@@ -3223,7 +3649,10 @@
       }
 
       loadStructure(taxonId) {
-        const db = window.CA_STRUCTURES || {};
+        // Remembered so residue colouring can look up this taxon's confidence kind;
+        // the scale differs per structure, not per dataset.
+        this.taxonId = taxonId;
+        const db = getCAStore();
         if (!db) {
           this.atoms = [];
           this.draw();
@@ -3285,7 +3714,7 @@
             plddt: a[3],
             resnum: a[4],
             resname: a[5] || "GLY",
-            color: this.getPlddtColor(a[3])
+            color: this.getResidueColor(a)
           };
         });
 
@@ -3301,6 +3730,14 @@
         if (val >= 70) return "#38bdf8";
         if (val >= 50) return "#facc15";
         return "#f97316";
+      }
+      getResidueColor(a) {
+        // a = [x, y, z, confidence, resnum, resname, lddtToQuery?]
+        const mode = (typeof resolveStructureColorMode === "function")
+          ? resolveStructureColorMode(this.taxonId) : "plddt";
+        const v = (mode === "lddt") ? a[6] : a[3];
+        return (typeof structureResidueColor === "function")
+          ? structureResidueColor(mode, v) : this.getPlddtColor(a[3]);
       }
 
       startAnimation() {
@@ -3405,7 +3842,7 @@
         this.canvas.width = Math.round(20 * dpr);
         this.canvas.height = Math.round(20 * dpr);
 
-        const db = window.CA_STRUCTURES || {};
+        const db = getCAStore();
         const sampleTaxon = Object.keys(db)[0];
         let raw = sampleTaxon ? db[sampleTaxon] : null;
         if (raw && raw.length > 25) {
@@ -3544,6 +3981,38 @@
                 && node.support !== undefined && node.support !== null && !isNaN(node.support));
     }
 
+    // A node with no support value is not always missing data. Where every child
+    // sits on a zero-length branch the sequences are identical over the alignment,
+    // so the tree builder emits a multifurcation rather than an arbitrary order of
+    // splits - there is no bipartition for a support value to describe. Saying
+    // "N/A" there reads as a gap in the annotation; it is really a statement that
+    // the data does not resolve this grouping.
+    function supportAbsenceReason(node) {
+      if (!node) return null;
+      // A terminal branch leads to a single tip. There is no bipartition, so no
+      // support value can exist - that is definitional, not a gap in the output.
+      // Returning null here let the caller coerce it to "absent", which labelled
+      // every terminal branch "Not reported" as though something had failed.
+      if (!node.children || node.children.length === 0) return "terminal";
+      if (node.support !== undefined && node.support !== null && !isNaN(node.support)) return null;
+      if (node.children.length > 2) {
+        const flat = node.children.every(c => !c.length || Math.abs(c.length) < 1e-9);
+        if (flat) return "polytomy-identical";
+        return "polytomy";
+      }
+      const flat2 = node.children.every(c => !c.length || Math.abs(c.length) < 1e-9);
+      if (flat2) return "zero-length";
+      return "absent";
+    }
+
+    const SUPPORT_ABSENCE_TEXT = {
+      "terminal": ["Not applicable", "a terminal branch leads to one tip, so there is no split to support"],
+      "polytomy-identical": ["Unresolved", "identical over the alignment - collapsed to a polytomy, so there is no split to support"],
+      "polytomy": ["Unresolved", "multifurcation - no single bipartition to support"],
+      "zero-length": ["Unresolved", "zero-length branch - the data does not separate these"],
+      "absent": ["Not reported", "the tree builder emitted no value for this branch"]
+    };
+
     function treeHasSingleValueSupport(root) {
       if (!root) return false;
       const stack = [root];
@@ -3590,91 +4059,62 @@
       return "";
     }
 
-    // 8C. VERTICAL BRANCH GRADIENT RESOLUTION
-    let verticalGradCounter = 0;
-    function applyVerticalBranchGradient(vLine, node, minY, maxY, defs) {
-      if (!settings.colorBranchesBySupport || !node || !defs) return;
-      if (typeof minY !== 'number' || typeof maxY !== 'number' || isNaN(minY) || isNaN(maxY)) return;
-
-      const span = maxY - minY;
-      const realPoints = [];
-
-      // 1. Collect all child horizontal branches with real support values/colors
-      if (node.children && node.children.length > 0) {
-        node.children.forEach(child => {
-          const col = getBranchStrokeColor(child);
-          if (col && typeof child.y === 'number' && !isNaN(child.y)) {
-            realPoints.push({ y: child.y, color: col });
-          }
-        });
+    // A terminal branch has no support of its own - there is no bipartition at a
+    // single tip - so support colouring used to stop short of the tips and leave
+    // the tree looking patchy. A tip does sit inside a supported clade, though, so
+    // it inherits the colour of the split it descends from. The value shown on
+    // hover is still the branch's own ("Not applicable" for a tip): the colour
+    // says which clade this tip belongs to, not that the tip itself is supported.
+    // Walk the ancestry for a support colour a tip can inherit.
+    //
+    // A terminal branch can never carry support of its own: its bipartition is
+    // {this tip} | {everything else}, which holds in every possible tree, so no
+    // program reports it. Rooting does not change that - a tip stays a tip.
+    // Inheriting from the immediate parent alone was not enough: a tip hanging off
+    // the unrooted trifurcating root, or off an unresolved polytomy, found nothing
+    // and fell back to the default stroke, which reads as a support colour rather
+    // than as an absence. Climb to the nearest supported ancestor instead, and
+    // where there is none, say so with a neutral tone.
+    function nearestSupportedAncestorColor(node) {
+      let a = node && node._parent;
+      let hops = 0;
+      while (a && hops < 64) {
+        const c = getBranchStrokeColor(a);
+        if (c) return c;
+        a = a._parent;
+        hops++;
       }
+      return "";
+    }
 
-      // 2. Collect incoming branch at node.y if it has a real support value/color
-      const parentCol = getBranchStrokeColor(node);
-      if (parentCol && typeof node.y === 'number' && !isNaN(node.y)) {
-        realPoints.push({ y: node.y, color: parentCol });
-      }
+    function getBranchStrokeColorInherited(child, parent) {
+      const own = getBranchStrokeColor(child);
+      if (own) return own;
+      if (!settings.inheritSupportColorToTips) return "";
+      if (!child || (child.children && child.children.length > 0)) return "";
+      if (!child._parent && parent) child._parent = parent;
+      const inherited = nearestSupportedAncestorColor(child);
+      if (inherited) return inherited;
+      // Nothing above this tip carries support - typically it hangs off the
+      // unrooted root. Neutral, so it is not mistaken for a weak-support colour.
+      return "var(--dim-branch, #6b7280)";
+    }
 
-      if (realPoints.length === 0) return;
-
-      // Deduplicate points with nearly identical Y coordinates (within 0.5px)
-      realPoints.sort((a, b) => a.y - b.y);
-      const uniquePoints = [];
-      realPoints.forEach(pt => {
-        if (uniquePoints.length === 0 || Math.abs(pt.y - uniquePoints[uniquePoints.length - 1].y) > 0.5) {
-          uniquePoints.push(pt);
-        }
-      });
-
-      if (uniquePoints.length === 1 || span <= 0.5) {
-        vLine.style.stroke = uniquePoints[0].color;
-        return;
-      }
-
-      const firstCol = uniquePoints[0].color;
-      const allSame = uniquePoints.every(p => p.color === firstCol);
-      if (allSame) {
-        vLine.style.stroke = firstCol;
-        return;
-      }
-
-      // 3. Construct vertical linearGradient with userSpaceOnUse for robust line rendering
-      const gradId = "vgrad_" + (++verticalGradCounter);
-      const grad = document.createElementNS("http://www.w3.org/2000/svg", "linearGradient");
-      grad.setAttribute("id", gradId);
-      grad.setAttribute("gradientUnits", "userSpaceOnUse");
-      grad.setAttribute("x1", node.x);
-      grad.setAttribute("y1", minY);
-      grad.setAttribute("x2", node.x);
-      grad.setAttribute("y2", maxY);
-
-      // Pad top if first real value is below minY
-      if (uniquePoints[0].y > minY + 0.1) {
-        const stopStart = document.createElementNS("http://www.w3.org/2000/svg", "stop");
-        stopStart.setAttribute("offset", "0%");
-        stopStart.setAttribute("stop-color", uniquePoints[0].color);
-        grad.appendChild(stopStart);
-      }
-
-      uniquePoints.forEach(pt => {
-        const frac = Math.max(0, Math.min(1, (pt.y - minY) / span));
-        const stop = document.createElementNS("http://www.w3.org/2000/svg", "stop");
-        stop.setAttribute("offset", (frac * 100).toFixed(2) + "%");
-        stop.setAttribute("stop-color", pt.color);
-        grad.appendChild(stop);
-      });
-
-      // Pad bottom if last real value is above maxY
-      const lastPt = uniquePoints[uniquePoints.length - 1];
-      if (lastPt.y < maxY - 0.1) {
-        const stopEnd = document.createElementNS("http://www.w3.org/2000/svg", "stop");
-        stopEnd.setAttribute("offset", "100%");
-        stopEnd.setAttribute("stop-color", lastPt.color);
-        grad.appendChild(stopEnd);
-      }
-
-      defs.appendChild(grad);
-      vLine.style.stroke = `url(#${gradId})`;
+    // 8C. VERTICAL CONNECTOR SUPPORT COLOUR
+    //
+    // The vertical connector IS the split: it spans the children of one node, and
+    // that node's support value is the statement about whether this grouping holds.
+    // It is therefore coloured by that node's own support, flat.
+    //
+    // It used to carry a gradient interpolating between its children's support
+    // colours. That implied support varies continuously along the connector, when
+    // it is a discrete property of a bipartition - there is no "support halfway
+    // along a connector" - and it disagreed with the tooltip, which has always
+    // reported the parent node. Colour and tooltip now describe the same thing.
+    function applyVerticalBranchGradient(vLine, node) {
+      if (!settings.colorBranchesBySupport || !node) return;
+      const col = getBranchStrokeColor(node);
+      if (col) vLine.style.stroke = col;
     }
 
     // =========================================================================
@@ -4348,13 +4788,14 @@
     // 10. TREE RENDERING PIPELINE
     const svg = document.getElementById("treeSvg");
 
-    function assignDepths(node, currentDepth = 0, currentClado = 0) {
+    function assignDepths(node, currentDepth = 0, currentClado = 0, parentNode = null) {
       node.depth = currentDepth;
       node.cladoDepth = currentClado;
+      node.parent = parentNode;
       if (node.children) {
         node.children.forEach(c => {
           const bLen = (typeof c.length === 'number' && !isNaN(c.length)) ? c.length : 1.0;
-          assignDepths(c, currentDepth + bLen, currentClado + 1);
+          assignDepths(c, currentDepth + bLen, currentClado + 1, node);
         });
       }
     }
@@ -5194,6 +5635,120 @@
       return res;
     }
 
+
+    // =========================================================================
+    // CROSS-DATASET COMPARISON
+    // Two runs are comparable only when they describe the same designs: a high
+    // taxon overlap AND identical amino-acid sequences for the taxa they share.
+    // With the sequences held constant, a topology difference is attributable to
+    // whatever differs upstream (e.g. the structure predictor) rather than to the
+    // input. Pairs that fail the gate are never offered.
+    // =========================================================================
+    const COMPARE_MIN_SHARED = 50;        // absolute floor on shared taxa
+    const COMPARE_MIN_OVERLAP = 0.80;     // of the smaller dataset
+    const _compareCache = { pairs: null, roots: {} };
+
+    function _datasetAASeqs(key) {
+      const d = (window.ALIGNMENTS_DATA || {})[key];
+      if (!d || !d.aa) return null;
+      const out = {};
+      for (const t in d.aa) out[t] = d.aa[t].replace(/-/g, "").toUpperCase();
+      return out;
+    }
+
+    function assessComparability(keyA, keyB) {
+      const a = _datasetAASeqs(keyA), b = _datasetAASeqs(keyB);
+      if (!a || !b) return { ok: false, reason: "no alignment data for one dataset" };
+      const ta = Object.keys(a), tb = new Set(Object.keys(b));
+      const shared = ta.filter(t => tb.has(t));
+      const smaller = Math.min(ta.length, tb.size);
+      const overlap = smaller ? shared.length / smaller : 0;
+      if (shared.length < COMPARE_MIN_SHARED || overlap < COMPARE_MIN_OVERLAP) {
+        return { ok: false, reason: `only ${shared.length} shared taxa (${(overlap * 100).toFixed(0)}% of the smaller set)`,
+                 shared: shared.length, overlap };
+      }
+      let identical = 0;
+      for (const t of shared) if (a[t] === b[t]) identical++;
+      const frac = shared.length ? identical / shared.length : 0;
+      if (frac < 0.99) {
+        return { ok: false, reason: `amino-acid sequences differ for ${shared.length - identical} of ${shared.length} shared taxa`,
+                 shared: shared.length, overlap, identical, seqMatch: frac };
+      }
+      return {
+        ok: true, shared: shared.length, overlap, identical, seqMatch: frac,
+        unmatchedA: ta.length - shared.length,
+        unmatchedB: tb.size - shared.length
+      };
+    }
+
+    function comparableDatasetPairs() {
+      if (_compareCache.pairs) return _compareCache.pairs;
+      const keys = Object.keys(window.ALIGNMENTS_DATA || {})
+        .filter(k => DATASETS[k] && (DATASETS[k].newick_3di || DATASETS[k].newick_aa));
+      const pairs = [];
+      for (let i = 0; i < keys.length; i++) {
+        for (let j = i + 1; j < keys.length; j++) {
+          const verdict = assessComparability(keys[i], keys[j]);
+          if (verdict.ok) pairs.push({ a: keys[i], b: keys[j], ...verdict });
+        }
+      }
+      _compareCache.pairs = pairs;
+      return pairs;
+    }
+
+    // Parse another dataset's tree on demand; the newick is already in DATASETS.
+    function getDatasetRoot(key, alphabet) {
+      const id = key + "|" + alphabet;
+      if (_compareCache.roots[id] !== undefined) return _compareCache.roots[id];
+      const ds = DATASETS[key];
+      let nw = null;
+      if (ds) {
+        if (alphabet === "aa") nw = ds.newick_aa;
+        else if (alphabet === "esm2") nw = ds.newick_esm2 || ds.newick_esm2_cosine;
+        else nw = ds.newick_3di;
+      }
+      const root = nw ? parseNewick(nw) : null;
+      _compareCache.roots[id] = root;
+      return root;
+    }
+
+    function datasetLabel(key) {
+      const ds = DATASETS[key];
+      if (!ds || !ds.title) return key;
+      return String(ds.title).replace(/^[^A-Za-z0-9]+/, "").replace(/\s*\(\d[\d,]*\s+taxa\)\s*$/, "").trim() || key;
+    }
+
+    // Cross-dataset comparison modes look like "xds:<keyA>:<keyB>:<alphabet>".
+    function parseCrossDatasetMode(mode) {
+      if (typeof mode !== "string" || !mode.startsWith("xds:")) return null;
+      const parts = mode.split(":");
+      if (parts.length !== 4) return null;
+      return { a: parts[1], b: parts[2], alphabet: parts[3] };
+    }
+
+    function populateCompareOptions() {
+      const sel = document.getElementById("tangleCompareSelect");
+      if (!sel) return;
+      const existing = sel.querySelector('optgroup[label="Across Datasets"]');
+      if (existing) existing.remove();
+      const pairs = comparableDatasetPairs().filter(p => p.a === currentScale || p.b === currentScale);
+      if (pairs.length === 0) return;
+      const grp = document.createElement("optgroup");
+      grp.label = "Across Datasets";
+      pairs.forEach(p => {
+        const other = p.a === currentScale ? p.b : p.a;
+        [["3di", "3Di Structural"], ["aa", "Amino Acid"]].forEach(([alph, alphLabel]) => {
+          if (!DATASETS[other] || !getDatasetRoot(other, alph)) return;
+          const o = document.createElement("option");
+          o.value = `xds:${currentScale}:${other}:${alph}`;
+          o.textContent = `\u2696\uFE0F ${alphLabel}: this run vs ${datasetLabel(other)}`;
+          o.title = `${p.shared} shared taxa, amino-acid sequences identical`;
+          grp.appendChild(o);
+        });
+      });
+      if (grp.childElementCount > 0) sel.appendChild(grp);
+    }
+
     function getActiveTanglegramTrees() {
       const compMode = settings.tangleCompare || "3di_vs_aa";
       let leftSrc = rawRoot3Di;
@@ -5202,8 +5757,19 @@
       let rightTitle = "Amino Acid Tree (IQ-TREE LG+G4)";
       let leftColor = "var(--accent)";
       let rightColor = "#a855f7";
+      let crossDataset = null;
 
-      if (compMode === "3di_vs_esm2_cosine" || compMode === "3di_vs_esm2") {
+      const xds = parseCrossDatasetMode(compMode);
+      if (xds) {
+        crossDataset = xds;
+        const alphLabel = xds.alphabet === "aa" ? "Amino Acid" : "3Di Structural";
+        leftSrc = getDatasetRoot(xds.a, xds.alphabet);
+        rightSrc = getDatasetRoot(xds.b, xds.alphabet);
+        leftTitle = `${alphLabel} \u2014 ${datasetLabel(xds.a)}`;
+        rightTitle = `${alphLabel} \u2014 ${datasetLabel(xds.b)}`;
+        leftColor = "var(--accent)";
+        rightColor = "#f59e0b";
+      } else if (compMode === "3di_vs_esm2_cosine" || compMode === "3di_vs_esm2") {
         leftSrc = rawRoot3Di;
         rightSrc = rawTrees["esm2_cosine"] || rawRoot3Di;
         leftTitle = "3Di Structural Tree (FoldMason + Q.3Di.LLM)";
@@ -5282,8 +5848,22 @@
         }
       }
 
+      // Across datasets the two runs legitimately hold different designs. Those
+      // stay in their pane (marked unmatched) instead of being pruned away;
+      // computeRF intersects the leaf sets itself, so the statistics are
+      // unaffected by keeping them.
+      let unmatchedLeft = 0, unmatchedRight = 0, sharedCount = 0;
+      if (crossDataset && tRootLeft && tRootRight) {
+        const nL = getAllLeaves(tRootLeft).map(l => l.name).filter(Boolean);
+        const nR = getAllLeaves(tRootRight).map(l => l.name).filter(Boolean);
+        const sL = new Set(nL), sR = new Set(nR);
+        sharedCount = nL.filter(n => sR.has(n)).length;
+        unmatchedLeft = nL.length - sharedCount;
+        unmatchedRight = nR.length - sharedCount;
+      }
+
       // Ensure both trees contain identical common taxa
-      if (tRootLeft && tRootRight) {
+      if (!crossDataset && tRootLeft && tRootRight) {
         const leavesL = getAllLeaves(tRootLeft).map(l => l.name).filter(Boolean);
         const leavesR = getAllLeaves(tRootRight).map(l => l.name).filter(Boolean);
         const setL = new Set(leavesL);
@@ -5304,7 +5884,11 @@
         rightTitle: rightTitle,
         leftColor: leftColor,
         rightColor: rightColor,
-        compMode: compMode
+        compMode: compMode,
+        crossDataset: crossDataset,
+        sharedCount: sharedCount,
+        unmatchedLeft: unmatchedLeft,
+        unmatchedRight: unmatchedRight
       };
     }
 
@@ -5916,15 +6500,25 @@
 
     function setMsaPartition(val) {
       msaState.activePartition = val || "all";
+      activeMsaPartition = msaState.activePartition;
       if (typeof updateAlignmentPartitionUI === "function") updateAlignmentPartitionUI();
       msaState.scrollX = 0;
       msaState.scrollY = 0;
       msaState._minimapCacheKey = null;
+      if (typeof parseAllActiveTrees === "function") parseAllActiveTrees();
+      if (typeof applyCurrentRooting === "function") applyCurrentRooting();
       applyTaxaFilter();
+      if (typeof updateTreeProvenanceBadge === "function") updateTreeProvenanceBadge();
       if (typeof showToastNotification === 'function' && val && val !== "all") {
         const align = (typeof getActiveAlignment === 'function') ? getActiveAlignment() : null;
         const pName = (align && align.name) ? align.name : val;
-        showToastNotification(`🔀 Tree & MSA synced to alignment partition: <strong>${pName}</strong>`);
+        const prov = (typeof activeTreeProvenance === "function") ? activeTreeProvenance() : null;
+        // Say which tree is on screen. The old wording claimed the tree was
+        // "synced" to the partition when it was only filtered to its taxa.
+        const note = (prov && prov.kind === "cluster")
+          ? `showing <strong>${pName}</strong>'s own tree (${prov.method || "iqtree"})`
+          : `MSA set to <strong>${pName}</strong>; tree is the whole-set tree filtered to its taxa`;
+        showToastNotification(`\u{1F500} ${note}`);
       }
     }
 
@@ -6692,14 +7286,44 @@
       }
     }
 
-        // CARTESIAN LAYOUT (Phylogram & Cladogram with Triangular Clades)
+    // A collapsed clade is drawn as a wedge whose height grows with the taxa it
+    // hides, but the layout used to give every visible leaf one identical slot.
+    // A 50-taxon wedge is 120px tall against a 14px slot, so it overlapped its
+    // neighbours. Reserve the height the wedge will actually occupy, so this is
+    // the single definition both the layout and the drawing read.
+    function collapsedWedgeHeight(node, spacing) {
+      const n = (getAllLeaves(node) || []).length;
+      return Math.min(Math.max(n * spacing * 0.55, 18), 120);
+    }
+
+    // Vertical slot a visible row needs: one spacing unit for a tip, the wedge
+    // height plus a little breathing room for a collapsed clade.
+    function visibleRowHeight(node, spacing) {
+      if (node && node._collapsed) {
+        return collapsedWedgeHeight(node, spacing) + spacing * 0.5;
+      }
+      return spacing;
+    }
+
+    // Place rows by accumulating their own heights rather than a fixed stride,
+    // and centre each row within the space it reserved.
+    function layoutVisibleRows(visibleLeaves, spacing, startY) {
+      let cursor = (typeof startY === "number") ? startY : 50;
+      visibleLeaves.forEach(leaf => {
+        const h = visibleRowHeight(leaf, spacing);
+        leaf.y = cursor + h / 2;
+        leaf._rowHeight = h;
+        cursor += h;
+      });
+      return cursor;
+    }
+
+        // CARTESIAN LAYOUT (Phylogram & Cladogram with Triangular Clades & Rotation)
     function renderCartesianTree(g, visibleLeaves, maxDepth, defs) {
       const spacing = settings.verticalSpacing;
       const xSpan = (visibleLeaves.length > 50) ? 650 : 480;
 
-      visibleLeaves.forEach((leaf, idx) => {
-        leaf.y = 50 + idx * spacing;
-      });
+      layoutVisibleRows(visibleLeaves, spacing, 50);
 
       function computeInternalCoords(node) {
         if (!node.children || node.children.length === 0 || node._collapsed) return;
@@ -6713,12 +7337,30 @@
       }
       computeInternalCoords(activeTreeRoot);
 
+      // Determine rotation group if settings.treeRotation !== 0
+      const rotDeg = ((settings.treeRotation || 0) % 360 + 360) % 360;
+      const validX_pre = visibleLeaves.map(l => l.x).filter(x => typeof x === 'number' && !isNaN(x));
+      const maxX_pre = (validX_pre.length > 0 ? Math.max(...validX_pre) : 200) + 140;
+      const minX_pre = 50;
+      const minY_pre = 50;
+      const maxY_pre = visibleLeaves.length * spacing + 50;
+      const cx = (minX_pre + maxX_pre) / 2;
+      const cy = (minY_pre + maxY_pre) / 2;
+
+      let treeG = g;
+      if (rotDeg !== 0) {
+        treeG = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        treeG.setAttribute("id", "cartesianRotationGroup");
+        treeG.setAttribute("transform", `rotate(${rotDeg}, ${cx}, ${cy})`);
+        g.appendChild(treeG);
+      }
+
       function drawBranches(node, currentX) {
         node.x = currentX;
 
         if (node._collapsed) {
-          drawCollapsedTriangle(g, node, maxDepth, xSpan, spacing);
-          drawNodePoint(g, node);
+          drawCollapsedTriangle(treeG, node, maxDepth, xSpan, spacing);
+          drawNodePoint(treeG, node);
           return;
         }
 
@@ -6734,10 +7376,16 @@
         vLine.setAttribute("x2", node.x);
         vLine.setAttribute("y2", maxY);
         vLine.setAttribute("class", "branch-path");
-        applyVerticalBranchGradient(vLine, node, minY, maxY, defs);
+        vLine.style.cursor = "pointer";
+        vLine.setAttribute("title", "Click to rotate / flip clade branches; Hover for clade details");
+        applyVerticalBranchGradient(vLine, node);
         vLine.addEventListener("mouseenter", (e) => showCladeTooltip(e, node));
         vLine.addEventListener("mouseleave", () => scheduleHideTooltip(250));
-        g.appendChild(vLine);
+        vLine.addEventListener("click", (e) => {
+          e.stopPropagation();
+          rotateSubtreeNode(node);
+        });
+        treeG.appendChild(vLine);
 
         node.children.forEach(child => {
           const bLen = settings.branchLengths ? (typeof child.length === 'number' ? child.length : 1.0) : 1.0;
@@ -6750,17 +7398,17 @@
           hLine.setAttribute("x2", childX);
           hLine.setAttribute("y2", child.y);
           hLine.setAttribute("class", "branch-path");
-          const bCol = getBranchStrokeColor(child);
+          const bCol = getBranchStrokeColorInherited(child, node);
           if (bCol) hLine.style.stroke = bCol;
 
           hLine.addEventListener("mouseenter", (e) => showBranchTooltip(e, child));
           hLine.addEventListener("mouseleave", () => scheduleHideTooltip(250));
-          g.appendChild(hLine);
+          treeG.appendChild(hLine);
 
           drawBranches(child, childX);
         });
 
-        drawNodePoint(g, node);
+        drawNodePoint(treeG, node);
       }
 
       drawBranches(activeTreeRoot, 50);
@@ -6772,7 +7420,7 @@
       visibleLeaves.forEach(leaf => {
         if (leaf._collapsed) return;
 
-        drawNodePoint(g, leaf);
+        drawNodePoint(treeG, leaf);
 
         const nodeR = typeof settings.nodeRadius === 'number' ? settings.nodeRadius : 3;
         const lx = settings.alignLabels ? maxX + 14 : leaf.x + nodeR + 4;
@@ -6788,7 +7436,7 @@
           guideLine.setAttribute("stroke-dasharray", "2,3");
           guideLine.setAttribute("stroke-width", "0.75");
           guideLine.setAttribute("opacity", "0.45");
-          g.appendChild(guideLine);
+          treeG.appendChild(guideLine);
         }
 
         const meta = TAXA_METADATA[leaf.name];
@@ -6799,23 +7447,42 @@
         txt.setAttribute("class", `tip-label ${leaf.name === settings.selectedTaxon ? "selected" : ""} ${getLeafFilterClass(leaf.name)}`);
         txt.setAttribute("data-taxon", leaf.name);
         txt.textContent = getLeafLabelText(leaf.name);
+
+        if (rotDeg !== 0) {
+          // Counter-rotate text so it remains 100% horizontal and legible on screen
+          const rad = (rotDeg * Math.PI) / 180;
+          const isFlipped = Math.cos(rad) < -0.01;
+          txt.setAttribute("transform", `rotate(${-rotDeg}, ${lx}, ${ly})`);
+          if (isFlipped) {
+            txt.setAttribute("text-anchor", "end");
+          }
+        }
+
         txt.onclick = (e) => { e.stopPropagation(); selectTaxon(leaf.name); };
         txt.onmouseenter = (e) => showNodeTooltip(e, leaf);
         txt.onmouseleave = () => scheduleHideTooltip(250);
-        g.appendChild(txt);
+        treeG.appendChild(txt);
 
         if (meta && settings.showMeta && visibleLeaves.length <= 65) {
           const colDef = getActiveColorColumnDef();
           const subText = colDef && meta[colDef.key] !== undefined ? `${meta[colDef.key]}` : "";
           if (subText) {
             const sub = document.createElementNS("http://www.w3.org/2000/svg", "text");
-            sub.setAttribute("x", lx + 140);
-            sub.setAttribute("y", ly);
+            const subLx = lx + 140;
+            const subLy = ly;
+            sub.setAttribute("x", subLx);
+            sub.setAttribute("y", subLy);
             sub.setAttribute("dominant-baseline", "central");
             sub.setAttribute("class", "tip-label-sub");
             sub.textContent = subText;
+            if (rotDeg !== 0) {
+              sub.setAttribute("transform", `rotate(${-rotDeg}, ${subLx}, ${subLy})`);
+              if (Math.cos((rotDeg * Math.PI) / 180) < -0.01) {
+                sub.setAttribute("text-anchor", "end");
+              }
+            }
             sub.onclick = (e) => { e.stopPropagation(); selectTaxon(leaf.name); };
-            g.appendChild(sub);
+            treeG.appendChild(sub);
           }
         }
       });
@@ -6834,7 +7501,7 @@
       const deltaDepth = Math.max(maxChildDepth - (node.depth || 0), 0.08);
       const triWidth = Math.max((deltaDepth / maxDepth) * xSpan, 65);
 
-      const triHeight = Math.min(Math.max(leaves.length * spacing * 0.55, 18), 120);
+      const triHeight = collapsedWedgeHeight(node, spacing);
 
       const apexX = node.x;
       const apexY = node.y;
@@ -6919,6 +7586,15 @@
       });
       circle.addEventListener("click", (e) => {
         e.stopPropagation();
+        if (e.shiftKey || e.altKey) {
+          const target = (node.children && node.children.length > 1)
+            ? node
+            : (node.parent && node.parent.children && node.parent.children.length > 1 ? node.parent : null);
+          if (target) {
+            rotateSubtreeNode(target);
+            return;
+          }
+        }
         if (node._collapsed || isCollapsible) {
           toggleCladeCollapse(node);
         } else if (node.name) {
@@ -7085,11 +7761,19 @@
           const d = `M ${node.x} ${node.y} A ${node.radius} ${node.radius} 0 0 ${child.angle > node.angle ? 1 : 0} ${midX} ${midY} L ${child.x} ${child.y}`;
           arcPath.setAttribute("d", d);
           arcPath.setAttribute("class", "branch-path");
-          const bCol = getBranchStrokeColor(child);
+          const bCol = getBranchStrokeColorInherited(child, node);
           if (bCol) arcPath.style.stroke = bCol;
 
+          arcPath.style.cursor = "pointer";
+          arcPath.setAttribute("title", "Click to rotate / flip clade branches; Hover for branch info");
           arcPath.addEventListener("mouseenter", (e) => showBranchTooltip(e, child));
           arcPath.addEventListener("mouseleave", () => scheduleHideTooltip(250));
+          arcPath.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (node.children && node.children.length > 1) {
+              rotateSubtreeNode(node);
+            }
+          });
           g.appendChild(arcPath);
 
           drawRadialBranches(child, childRadius);
@@ -7240,7 +7924,7 @@
           line.setAttribute("x2", nextX);
           line.setAttribute("y2", nextY);
           line.setAttribute("class", "branch-path");
-          const bCol = getBranchStrokeColor(child);
+          const bCol = getBranchStrokeColorInherited(child, node);
           if (bCol) line.style.stroke = bCol;
 
           line.addEventListener("mouseenter", (e) => showBranchTooltip(e, child));
@@ -7450,7 +8134,7 @@
         vLine.setAttribute("x2", node.x);
         vLine.setAttribute("y2", maxY);
         vLine.setAttribute("class", "branch-path");
-        applyVerticalBranchGradient(vLine, node, minY, maxY, defs);
+        applyVerticalBranchGradient(vLine, node);
         g.appendChild(vLine);
 
         node.children.forEach(child => {
@@ -7464,7 +8148,7 @@
           hLine.setAttribute("x2", childX);
           hLine.setAttribute("y2", child.y);
           hLine.setAttribute("class", "branch-path");
-          const bCol = getBranchStrokeColor(child);
+          const bCol = getBranchStrokeColorInherited(child, node);
           if (bCol) hLine.style.stroke = bCol;
           hLine.addEventListener("mouseenter", (e) => showBranchTooltip(e, child));
           hLine.addEventListener("mouseleave", () => scheduleHideTooltip(250));
@@ -7490,7 +8174,7 @@
         vLine.setAttribute("x2", node.x);
         vLine.setAttribute("y2", maxY);
         vLine.setAttribute("class", "branch-path");
-        applyVerticalBranchGradient(vLine, node, minY, maxY, defs);
+        applyVerticalBranchGradient(vLine, node);
         g.appendChild(vLine);
 
         node.children.forEach(child => {
@@ -7504,7 +8188,7 @@
           hLine.setAttribute("x2", childX);
           hLine.setAttribute("y2", child.y);
           hLine.setAttribute("class", "branch-path");
-          const bCol = getBranchStrokeColor(child);
+          const bCol = getBranchStrokeColorInherited(child, node);
           if (bCol) hLine.style.stroke = bCol;
           hLine.addEventListener("mouseenter", (e) => showBranchTooltip(e, child));
           hLine.addEventListener("mouseleave", () => scheduleHideTooltip(250));
@@ -7700,6 +8384,15 @@
       });
 
       document.getElementById("btnTooltipReroot").textContent = "⚓ Reroot at Leaf Edge";
+      const btnRotNode = document.getElementById("btnTooltipRotateSubtree");
+      if (btnRotNode) {
+        if (leaf.parent && leaf.parent.children && leaf.parent.children.length > 1) {
+          btnRotNode.classList.remove("hidden");
+          btnRotNode.innerHTML = `<span>🔄 Rotate Siblings</span>`;
+        } else {
+          btnRotNode.classList.add("hidden");
+        }
+      }
       document.getElementById("tooltipViewerWrapper").classList.remove("hidden");
 
       positionTooltip(e);
@@ -7724,6 +8417,18 @@
       `;
 
       document.getElementById("btnTooltipReroot").textContent = "⚓ Reroot at Clade Stem";
+      const btnRotClade = document.getElementById("btnTooltipRotateSubtree");
+      if (btnRotClade) {
+        if (node.children && node.children.length > 1) {
+          btnRotClade.classList.remove("hidden");
+          btnRotClade.innerHTML = `<span>🔄 Rotate Subtree</span>`;
+        } else if (node.parent && node.parent.children && node.parent.children.length > 1) {
+          btnRotClade.classList.remove("hidden");
+          btnRotClade.innerHTML = `<span>🔄 Rotate Siblings</span>`;
+        } else {
+          btnRotClade.classList.add("hidden");
+        }
+      }
       document.getElementById("tooltipViewerWrapper").classList.add("hidden");
 
       positionTooltip(e);
@@ -7749,9 +8454,21 @@
         supportHtml += `<div class="flex justify-between"><span>SH-aLRT Support:</span><strong class="text-indigo-400 font-mono">${alrtVal}%</strong></div>`;
       }
       if (!supportHtml) {
-        const supVal = childNode.support !== null && !isNaN(childNode.support) ? (childNode.support <= 1.0 && childNode.support > 0.0 ? (childNode.support * 100).toFixed(1) + "%" : childNode.support) : "N/A";
-        const supLabel = isSingleValueSupport(childNode) ? "Support (single value, e.g. FastTree SH-like):" : "Support:";
-        supportHtml = `<div class="flex justify-between"><span>${supLabel}</span><strong class="text-sky-400 font-mono">${supVal}</strong></div>`;
+        const hasVal = childNode.support !== null && childNode.support !== undefined && !isNaN(childNode.support);
+        if (hasVal) {
+          const supVal = (childNode.support <= 1.0 && childNode.support > 0.0)
+            ? (childNode.support * 100).toFixed(1) + "%" : childNode.support;
+          const supLabel = isSingleValueSupport(childNode) ? "Support (single value, e.g. FastTree SH-like):" : "Support:";
+          supportHtml = `<div class="flex justify-between"><span>${supLabel}</span><strong class="text-sky-400 font-mono">${supVal}</strong></div>`;
+        } else {
+          const reason = supportAbsenceReason(childNode) || "absent";
+          const [word, why] = SUPPORT_ABSENCE_TEXT[reason] || SUPPORT_ABSENCE_TEXT.absent;
+          const tone = (reason === "absent" || reason === "terminal") ? "text-slate-400" : "text-amber-400";
+          supportHtml =
+            `<div class="flex justify-between"><span>Support:</span>` +
+            `<strong class="${tone} font-mono">${word}</strong></div>` +
+            `<div class="text-[9.5px] text-[var(--text-muted)] leading-snug mt-0.5">${why}</div>`;
+        }
       }
 
       metaList.innerHTML = `
@@ -7760,6 +8477,18 @@
       `;
 
       document.getElementById("btnTooltipReroot").textContent = "⚓ Reroot at this Branch";
+      const btnRotBranch = document.getElementById("btnTooltipRotateSubtree");
+      if (btnRotBranch) {
+        if (childNode.children && childNode.children.length > 1) {
+          btnRotBranch.classList.remove("hidden");
+          btnRotBranch.innerHTML = `<span>🔄 Rotate Subtree</span>`;
+        } else if (childNode.parent && childNode.parent.children && childNode.parent.children.length > 1) {
+          btnRotBranch.classList.remove("hidden");
+          btnRotBranch.innerHTML = `<span>🔄 Rotate Siblings</span>`;
+        } else {
+          btnRotBranch.classList.add("hidden");
+        }
+      }
       document.getElementById("tooltipViewerWrapper").classList.add("hidden");
 
       positionTooltip(e);
@@ -7782,6 +8511,18 @@
       `;
 
       document.getElementById("btnTooltipReroot").textContent = "⚓ Reroot at Clade Stem";
+      const btnRotClade = document.getElementById("btnTooltipRotateSubtree");
+      if (btnRotClade) {
+        if (node.children && node.children.length > 1) {
+          btnRotClade.classList.remove("hidden");
+          btnRotClade.innerHTML = `<span>🔄 Rotate Subtree</span>`;
+        } else if (node.parent && node.parent.children && node.parent.children.length > 1) {
+          btnRotClade.classList.remove("hidden");
+          btnRotClade.innerHTML = `<span>🔄 Rotate Siblings</span>`;
+        } else {
+          btnRotClade.classList.add("hidden");
+        }
+      }
       document.getElementById("tooltipViewerWrapper").classList.add("hidden");
 
       positionTooltip(e);
@@ -8186,6 +8927,32 @@
         maxX = Math.max(...validX) + 140;
         minY = Math.min(...validY);
         maxY = Math.max(...validY);
+
+        // Account for tree rotation in Cartesian layouts
+        const rotDeg = ((settings.treeRotation || 0) % 360 + 360) % 360;
+        if (rotDeg !== 0) {
+          const cx = (minX + maxX) / 2;
+          const cy = (minY + maxY) / 2;
+          const rad = (rotDeg * Math.PI) / 180;
+          const cosA = Math.cos(rad);
+          const sinA = Math.sin(rad);
+
+          const corners = [
+            { x: minX, y: minY },
+            { x: maxX, y: minY },
+            { x: maxX, y: maxY },
+            { x: minX, y: maxY }
+          ];
+          const rotCorners = corners.map(pt => ({
+            x: cx + (pt.x - cx) * cosA - (pt.y - cy) * sinA,
+            y: cy + (pt.x - cx) * sinA + (pt.y - cy) * cosA
+          }));
+
+          minX = Math.min(...rotCorners.map(p => p.x));
+          maxX = Math.max(...rotCorners.map(p => p.x));
+          minY = Math.min(...rotCorners.map(p => p.y));
+          maxY = Math.max(...rotCorners.map(p => p.y));
+        }
       }
 
       const treeW = Math.max(maxX - minX, 100);
@@ -8432,6 +9199,31 @@
         minY = Math.min(...validY);
         maxY = Math.max(...validY);
 
+        const rotDeg = ((settings.treeRotation || 0) % 360 + 360) % 360;
+        const isCartesianRot = (settings.layout !== "radial" && settings.layout !== "unrooted" && rotDeg !== 0);
+        let centerCx = (minX + maxX) / 2;
+        let centerCy = (minY + maxY) / 2;
+        let rotRad = (rotDeg * Math.PI) / 180;
+        let cosA = Math.cos(rotRad);
+        let sinA = Math.sin(rotRad);
+
+        if (isCartesianRot) {
+          const corners = [
+            { x: minX, y: minY },
+            { x: maxX, y: minY },
+            { x: maxX, y: maxY },
+            { x: minX, y: maxY }
+          ];
+          const rotCorners = corners.map(pt => ({
+            x: centerCx + (pt.x - centerCx) * cosA - (pt.y - centerCy) * sinA,
+            y: centerCy + (pt.x - centerCx) * sinA + (pt.y - centerCy) * cosA
+          }));
+          minX = Math.min(...rotCorners.map(p => p.x));
+          maxX = Math.max(...rotCorners.map(p => p.x));
+          minY = Math.min(...rotCorners.map(p => p.y));
+          maxY = Math.max(...rotCorners.map(p => p.y));
+        }
+
         const spanX = Math.max(maxX - minX, 60);
         const spanY = Math.max(maxY - minY, 60);
 
@@ -8449,10 +9241,26 @@
         minimapCtx.strokeStyle = isDark ? "rgba(100, 116, 139, 0.45)" : "rgba(148, 163, 184, 0.6)";
         minimapCtx.lineWidth = 1.0;
 
+        function getMiniPos(nodeX, nodeY) {
+          if (isCartesianRot) {
+            const rx = centerCx + (nodeX - centerCx) * cosA - (nodeY - centerCy) * sinA;
+            const ry = centerCy + (nodeX - centerCx) * sinA + (nodeY - centerCy) * cosA;
+            return {
+              x: pad + (rx - minX) * scaleX,
+              y: pad + (ry - minY) * scaleY
+            };
+          }
+          return {
+            x: pad + (nodeX - minX) * scaleX,
+            y: pad + (nodeY - minY) * scaleY
+          };
+        }
+
         function drawMiniBranch(node) {
           if (!node || typeof node.x !== 'number' || typeof node.y !== 'number') return;
-          const nx = pad + (node.x - minX) * scaleX;
-          const ny = pad + (node.y - minY) * scaleY;
+          const pos = getMiniPos(node.x, node.y);
+          const nx = pos.x;
+          const ny = pos.y;
 
           if (node._collapsed) {
             minimapCtx.fillStyle = getNodeColor(node);
@@ -8472,12 +9280,17 @@
 
           node.children.forEach(c => {
             if (typeof c.x === 'number' && typeof c.y === 'number') {
-              const cx = pad + (c.x - minX) * scaleX;
-              const cy = pad + (c.y - minY) * scaleY;
+              const cPos = getMiniPos(c.x, c.y);
+              const cxMini = cPos.x;
+              const cyMini = cPos.y;
               minimapCtx.beginPath();
               minimapCtx.moveTo(nx, ny);
-              minimapCtx.lineTo(nx, cy);
-              minimapCtx.lineTo(cx, cy);
+              if (isCartesianRot) {
+                minimapCtx.lineTo(cxMini, cyMini);
+              } else {
+                minimapCtx.lineTo(nx, cyMini);
+                minimapCtx.lineTo(cxMini, cyMini);
+              }
               minimapCtx.stroke();
               drawMiniBranch(c);
             }
@@ -8705,6 +9518,16 @@
       }
     }
 
+    function refreshCompareOptions() {
+      populateCompareOptions();
+      const xds = parseCrossDatasetMode(settings.tangleCompare);
+      if (xds && xds.a !== currentScale && xds.b !== currentScale) {
+        settings.tangleCompare = "3di_vs_aa";
+      }
+      const sel = document.getElementById("tangleCompareSelect");
+      if (sel) sel.value = settings.tangleCompare || "3di_vs_aa";
+    }
+
     function setTangleCompare(compareMode) {
       settings.tangleCompare = compareMode;
       updateCongruenceUI(); // Fix bug: call updateCongruenceUI directly!
@@ -8729,6 +9552,9 @@
 
       parseAllActiveTrees();
       updateModalityOptions();
+      refreshCompareOptions();
+      updateDiagnosticsUI();
+      updateStructureColorNote();
       updatePaletteMiniStrip();
 
       settings.verticalSpacing = ds.defaultSpacing;
@@ -8821,13 +9647,38 @@
     }
 
     function setTreeRotation(deg) {
-      settings.treeRotation = parseFloat(deg) || 0;
-      const rBadge = document.getElementById("treeRotationVal");
-      if (rBadge) rBadge.textContent = Math.round(settings.treeRotation) + "°";
-      const uBadge = document.getElementById("unrootedRotationVal");
-      if (uBadge) uBadge.textContent = Math.round(settings.treeRotation) + "°";
+      let rot = (parseFloat(deg) || 0) % 360;
+      if (rot < 0) rot += 360;
+      settings.treeRotation = Math.round(rot);
+
+      const rotStr = settings.treeRotation + "°";
+      const badges = ["treeRotationVal", "unrootedRotationVal", "rectRotationVal", "hudRotationVal", "hudPopoverRotationVal"];
+      badges.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = rotStr;
+      });
+
+      const sliders = ["treeRotationSlider", "unrootedRotationSlider", "rectRotationSlider", "hudRotationSlider"];
+      sliders.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = settings.treeRotation;
+      });
+
       renderTree();
       updateMinimap();
+    }
+
+    function stepTreeRotation(delta) {
+      const current = settings.treeRotation || 0;
+      let next = (current + delta) % 360;
+      if (next < 0) next += 360;
+      setTreeRotation(next);
+    }
+
+    function toggleRotationPopover() {
+      const popover = document.getElementById("hudRotationPopover");
+      if (!popover) return;
+      popover.classList.toggle("hidden");
     }
 
     function setRadialArc(deg) {
@@ -9166,6 +10017,33 @@
 
     // INITIALIZATION
     toggleBackgroundGrid(settings.showGrid);
+    // Keyboard shortcut / Escape listener
+    window.addEventListener("keydown", (e) => {
+      if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA")) return;
+      if (e.key === "Escape") {
+        const popover = document.getElementById("hudRotationPopover");
+        if (popover) popover.classList.add("hidden");
+        const modal = document.getElementById("congruenceModal");
+        if (modal) modal.classList.add("hidden");
+      } else if (e.key === "r" || e.key === "R") {
+        if (pendingHoverNode) {
+          triggerHoverRotateSubtree();
+        } else {
+          stepTreeRotation(e.shiftKey ? -90 : 90);
+        }
+      }
+    });
+
+    document.addEventListener("click", (e) => {
+      const group = document.getElementById("hudRotationGroup");
+      const popover = document.getElementById("hudRotationPopover");
+      if (popover && !popover.classList.contains("hidden")) {
+        if (group && !group.contains(e.target)) {
+          popover.classList.add("hidden");
+        }
+      }
+    });
+
     window.addEventListener("DOMContentLoaded", () => {
       try {
         const savedPal = localStorage.getItem("phylo_custom_palette");
@@ -9190,6 +10068,9 @@
       initCustomThemeFromStorage();
       setTheme(settings.theme);
       updateModalityOptions();
+      refreshCompareOptions();
+      updateDiagnosticsUI();
+      updateStructureColorNote();
       populateMetadataSelectors();
       populateOutgroupSelect();
       updateLegend();
@@ -9569,7 +10450,7 @@
         files.push({ name: "metadata/" + label + "_metadata.json", content: JSON.stringify(metaObj, null, 2) });
 
         // D. 3D Structures (C-alpha traces)
-        const structDict = window.CA_STRUCTURES || window.CA_500_STRUCTURES || window.CA_100_STRUCTURES || {};
+        const structDict = getCAStore();
         const subsetStructs = {};
         if (structDict) {
           for (const tid of targetTaxa) {
