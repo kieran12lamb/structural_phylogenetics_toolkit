@@ -17,8 +17,12 @@ import shutil
 import subprocess
 import re
 from pathlib import Path
-import numpy as np
+try:
+    import numpy as np
+except ImportError:
+    np = None
 from viral_phylo.metadata import parse_metadata, EXPANDED_PALETTE, KNOWN_VALUE_COLORS
+from viral_phylo.web.alignments import _iter_result_dirs
 from viral_phylo.web.report import assemble_html
 
 repo_dir = Path(__file__).resolve().parent.parent.parent
@@ -86,19 +90,6 @@ newick_500_esm2 = newick_500_esm2_cosine
 newick_1193_esm2 = newick_1193_esm2_cosine
 
 # Load Silhouette Profiles for all 3 modalities (ESM-2, 3Di, AA) across datasets
-def _iter_result_dirs(results_dir):
-    """List entries under results/, tolerating the directory being absent.
-
-    results/ holds generated output and is not tracked, so a fresh clone has no
-    such directory. Auto-discovery of custom workflows must then find nothing
-    rather than raising.
-    """
-    try:
-        return sorted(Path(results_dir).iterdir())
-    except (FileNotFoundError, NotADirectoryError, OSError):
-        return []
-
-
 def load_json_if_exists(p):
     return json.loads(p.read_text()) if p.exists() else None
 
@@ -855,12 +846,26 @@ def load_cluster_trees(result_dir):
     out = {}
     for d in sorted(p for p in phy.iterdir() if p.is_dir() and p.name.startswith("cluster_")):
         entry = {}
-        for suffix, key in (("alphafold", "newick_3di"), ("aa", "newick_aa")):
+        for suffix in ("alphafold", "both", "esmfold", "af", "llm", "auto", "3di_fasttree", "3di"):
             hits = sorted(d.glob(f"*_{suffix}.treefile"))
             if hits:
                 txt = _read_text(hits[0]).strip()
                 if txt:
-                    entry[key] = txt
+                    entry["newick_3di"] = txt
+                    break
+        if "newick_3di" not in entry:
+            fm_hits = sorted(d.glob("*_foldmason.nwk"))
+            if fm_hits:
+                txt = _read_text(fm_hits[0]).strip()
+                if txt:
+                    entry["newick_3di"] = txt
+        for suffix in ("aa", "aa_fasttree"):
+            hits = sorted(d.glob(f"*_{suffix}.treefile"))
+            if hits:
+                txt = _read_text(hits[0]).strip()
+                if txt:
+                    entry["newick_aa"] = txt
+                    break
         if not entry:
             continue
         probe = entry.get("newick_3di") or entry.get("newick_aa") or ""
@@ -998,22 +1003,23 @@ def build_run_diagnostics(result_dir, newick_3di=None, newick_aa=None):
     }
 
 
-for d in _iter_result_dirs(results_dir):
-    if not d.is_dir() or d.name.startswith(".") or d.name in known_core_datasets:
-        continue
+def build_workflow_dataset_entry(d: Path):
+    """Build a DATASETS entry dictionary for a completed workflow directory ``d``."""
+    d = Path(d)
     phy = d / "phylogeny"
     if not phy.exists():
-        continue
-    treefiles = list(phy.glob("*.treefile"))
-    if not treefiles:
-        continue
+        return None
+    treefiles = list(phy.glob("*.treefile")) + list(phy.glob("*_foldmason.nwk"))
+    cluster_trees = load_cluster_trees(d)
+    if not treefiles and not cluster_trees:
+        return None
 
     # Determine 3di, aa, esm2 trees
     newick_3di, newick_aa, newick_esm2 = "", "", ""
     for tf in treefiles:
         name = tf.name.lower()
         txt = tf.read_text(encoding="utf-8", errors="ignore").strip()
-        if "3di" in name or "both" in name or "alphafold" in name:
+        if "3di" in name or "both" in name or "alphafold" in name or "esmfold" in name or "foldmason" in name:
             newick_3di = txt
         elif "aa" in name:
             newick_aa = txt
@@ -1021,6 +1027,9 @@ for d in _iter_result_dirs(results_dir):
             newick_esm2 = txt
     if not newick_3di and treefiles:
         newick_3di = treefiles[0].read_text(encoding="utf-8", errors="ignore").strip()
+    if not newick_3di and cluster_trees:
+        first_ct = next(iter(cluster_trees.values()))
+        newick_3di = first_ct.get("newick_3di") or first_ct.get("newick_aa") or ""
     if not newick_aa and newick_3di:
         newick_aa = newick_3di
 
@@ -1061,25 +1070,34 @@ for d in _iter_result_dirs(results_dir):
     taxa_count = len(meta)
     clean_title = d.name.replace("_", " ").title()
     title = f"🧪 {clean_title} ({taxa_count} taxa)"
-    key = d.name
 
-    custom_npz = list(phy.glob("*_embeddings_esm2.npz"))
+    custom_npz = list(phy.glob("*_embeddings_*.npz"))
     custom_umap = None
-    if custom_npz:
+    umap_jsons = sorted(phy.glob("*_umap_*.json"))
+    if umap_jsons:
+        raw_u = load_json_if_exists(umap_jsons[0])
+        if isinstance(raw_u, dict) and "coordinates" in raw_u:
+            coords = raw_u["coordinates"]
+            utaxa = [t for t in raw_u.get("taxa", list(coords.keys())) if t in coords]
+            custom_umap = {
+                "taxa": utaxa,
+                "x": [coords[t][0] for t in utaxa],
+                "y": [coords[t][1] for t in utaxa],
+            }
+        elif isinstance(raw_u, dict) and "x" in raw_u and "y" in raw_u:
+            custom_umap = raw_u
+    if not custom_umap and custom_npz:
         custom_umap = load_or_compute_umap(custom_npz[0], phy / f"{d.name}_umap_esm2.json")
 
-    # Load any silhouette profiles this workflow produced. These were previously
-    # hardcoded to None for auto-discovered datasets, so a custom run's scores could
-    # never reach the dashboard even when the JSON was sitting next to the tree.
     def _first_silhouette(suffix):
         matches = sorted(phy.glob(f"*_silhouette_{suffix}.json"))
         return load_json_if_exists(matches[0]) if matches else None
 
-    custom_sil_esm2 = _first_silhouette("esm2")
+    custom_sil_esm2 = _first_silhouette("esm2") or _first_silhouette("esmc")
     custom_sil_3di = _first_silhouette("3di")
     custom_sil_aa = _first_silhouette("aa")
 
-    DATASETS[key] = {
+    return {
         "title": title,
         "has_esm": bool(newick_esm2),
         "newick_3di": newick_3di,
@@ -1102,10 +1120,20 @@ for d in _iter_result_dirs(results_dir):
         "silhouette_aa": custom_sil_aa,
         "esm2_umap": custom_umap,
         "diagnostics": build_run_diagnostics(d, newick_3di, newick_aa),
-        "cluster_trees": load_cluster_trees(d),
+        "cluster_trees": cluster_trees,
     }
-    custom_options_html.append(f'              <option value="{key}">{title}</option>')
-    print(f"Auto-registered custom dataset in DATASETS: {key} -> {title}")
+
+
+for d in _iter_result_dirs(results_dir):
+    if not d.is_dir() or d.name.startswith(".") or d.name in known_core_datasets:
+        continue
+    entry = build_workflow_dataset_entry(d)
+    if not entry:
+        continue
+    key = d.name
+    DATASETS[key] = entry
+    custom_options_html.append(f'              <option value="{key}">{entry["title"]}</option>')
+    print(f"Auto-registered custom dataset in DATASETS: {key} -> {entry['title']}")
 
 datasets_json = json.dumps(DATASETS)
 extra_scale_options = "\n".join(custom_options_html)
@@ -1169,17 +1197,7 @@ def build_interactive_tree(repo_dir: Path = None, results_dir: Path = None):
         with open(index_html, "w", encoding="utf-8") as f:
             f.write(out_html)
 
-    # 3. Convenience symlink from repo root
-    root_link = repo_dir / "interactive_tree.html"
-    try:
-        if root_link.is_symlink() or root_link.exists():
-            root_link.unlink()
-        rel_target = os.path.relpath(primary_html, repo_dir)
-        root_link.symlink_to(rel_target)
-    except OSError:
-        pass
-
-    # 4. Optional IDE artifact output
+    # 3. Optional IDE artifact output
     extra_dir = os.environ.get("ANTIGRAVITY_ARTIFACT_DIR")
     if extra_dir and Path(extra_dir).exists():
         with open(Path(extra_dir) / "interactive_tree.html", "w", encoding="utf-8") as f:

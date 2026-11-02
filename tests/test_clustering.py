@@ -50,9 +50,9 @@ class TestClustering(unittest.TestCase):
     def test_scipy_clustering_if_available(self):
         """If scipy is installed, test embed_and_cluster hierarchical tree and silhouette."""
         try:
-            from scripts.embed_and_cluster import build_hierarchical_tree, compute_silhouette_profile
+            from viral_phylo.embeddings import build_hierarchical_tree, compute_silhouette_profile
         except ImportError:
-            self.skipTest("SciPy or embed_and_cluster dependencies not available")
+            self.skipTest("SciPy or viral_phylo.embeddings dependencies not available")
 
         newick, Z, condensed = build_hierarchical_tree(self.taxa, self.vectors, clustering="upgma", metric="cosine")
         

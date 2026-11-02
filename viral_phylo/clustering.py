@@ -21,6 +21,8 @@ partitions. Each is scored by silhouette in two independent dense metric spaces
 would happily reproduce the singleton pathology it is meant to solve.
 """
 
+from __future__ import annotations
+
 import glob
 import json
 import os
@@ -28,8 +30,12 @@ import shutil
 import subprocess
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-import numpy as np
+try:
+    import numpy as np
+except ImportError:
+    np = None
 
+from viral_phylo.alignment import parse_alignment_fasta as parse_fasta
 from viral_phylo.binaries import find_foldseek_bin, find_mmseqs_bin, tool_is_available
 
 # Amino-acid clustering sweeps sequence identity; structural clustering sweeps
@@ -100,26 +106,6 @@ class ClusteringToolMissing(RuntimeError):
 
 
 # --------------------------------------------------------------------------- QC
-
-
-def parse_fasta(path: str) -> Dict[str, str]:
-    """Read a FASTA file into an ordered ``{id: sequence}`` mapping."""
-    records: Dict[str, str] = {}
-    name: Optional[str] = None
-    chunks: List[str] = []
-    with open(path, "r", encoding="utf-8", errors="ignore") as handle:
-        for line in handle:
-            line = line.strip()
-            if line.startswith(">"):
-                if name is not None:
-                    records[name] = "".join(chunks)
-                name = line[1:].split()[0] if len(line) > 1 else ""
-                chunks = []
-            elif name is not None:
-                chunks.append(line)
-    if name is not None:
-        records[name] = "".join(chunks)
-    return records
 
 
 def qc_filter_sequences(
@@ -434,16 +420,263 @@ def embedding_distance_matrix(npz_path: str) -> Tuple[List[str], np.ndarray]:
     is independent of the mmseqs/foldseek identity used to form the clusters, it
     validates a partition rather than grading its own homework.
     """
+    taxa, _vecs, distance = load_embedding_space(npz_path)
+    return taxa, distance
+
+
+def load_embedding_space(
+    npz_path: str,
+    taxa: Optional[Sequence[str]] = None,
+    metric: str = "cosine",
+) -> Tuple[List[str], np.ndarray, np.ndarray]:
+    """Load PLM embeddings and compute pairwise distances for ``taxa``.
+
+    Returns ``(ordered_taxa, embeddings_matrix, distance_matrix)``.
+    """
     data = np.load(npz_path, allow_pickle=True)
-    taxa = [str(t) for t in data["taxa"]]
-    embeddings = np.asarray(data["embeddings"], dtype=np.float64)
+    raw_taxa = [str(t) for t in data["taxa"]]
+    raw_embeddings = np.asarray(data["embeddings"], dtype=np.float64)
+
+    if taxa is not None:
+        index = {t: i for i, t in enumerate(raw_taxa)}
+        usable = [t for t in taxa if t in index]
+        order = np.array([index[t] for t in usable], dtype=int)
+        ordered_taxa = list(usable)
+        embeddings = raw_embeddings[order] if len(order) else np.empty((0, raw_embeddings.shape[1]), dtype=np.float64)
+    else:
+        ordered_taxa = raw_taxa
+        embeddings = raw_embeddings
+
     norms = np.linalg.norm(embeddings, axis=1, keepdims=True)
     norms = np.where(norms == 0, 1e-12, norms)
     unit = embeddings / norms
-    similarity = np.clip(unit @ unit.T, -1.0, 1.0)
-    distance = 1.0 - similarity
+
+    if metric == "euclidean":
+        diff = embeddings[:, np.newaxis, :] - embeddings[np.newaxis, :, :]
+        distance = np.sqrt(np.sum(diff ** 2, axis=-1))
+    elif metric in ("l1", "cityblock", "manhattan"):
+        diff = embeddings[:, np.newaxis, :] - embeddings[np.newaxis, :, :]
+        distance = np.sum(np.abs(diff), axis=-1)
+    else:
+        similarity = np.clip(unit @ unit.T, -1.0, 1.0)
+        distance = 1.0 - similarity
+
     np.fill_diagonal(distance, 0.0)
-    return taxa, distance
+    return ordered_taxa, embeddings, distance
+
+
+def plm_cluster(
+    taxa: Sequence[str],
+    embeddings: np.ndarray,
+    k: int,
+    algorithm: str = "kmeans",
+    metric: str = "cosine",
+    seed: int = 42,
+) -> Dict[str, List[str]]:
+    """Cluster sequences directly in PLM embedding space into ``k`` clusters.
+
+    Supported ``algorithm`` values:
+      * ``"kmeans"`` (default): K-Means on L2-normalised embeddings (spherical k-means
+        when ``metric == "cosine"``) or raw embeddings (when Euclidean/L1).
+      * ``"agglomerative"``: Hierarchical agglomerative clustering with average linkage
+        in the chosen metric space.
+      * ``"ward"``: Hierarchical Ward variance-minimising clustering on L2-normalised
+        embeddings.
+      * ``"spectral"``: Spectral clustering on the cosine similarity graph.
+
+    Returns ``{representative_taxon: [member_taxa, ...]}`` where each cluster's
+    representative is its medoid (the member closest to the cluster centroid).
+    """
+    from sklearn.cluster import AgglomerativeClustering, KMeans, SpectralClustering
+
+    taxa_list = list(taxa)
+    n = len(taxa_list)
+    if n == 0:
+        return {}
+    k = max(1, min(int(k), n))
+    if k == 1:
+        return {taxa_list[0]: list(taxa_list)}
+    if k == n:
+        return {t: [t] for t in taxa_list}
+
+    X = np.asarray(embeddings, dtype=np.float64)
+    norms = np.linalg.norm(X, axis=1, keepdims=True)
+    norms = np.where(norms == 0, 1e-12, norms)
+    X_unit = X / norms
+    features = X_unit if metric == "cosine" else X
+
+    alg = (algorithm or "kmeans").lower()
+    if alg == "kmeans":
+        model = KMeans(n_clusters=k, random_state=seed, n_init=10)
+        labels = model.fit_predict(features)
+    elif alg == "ward":
+        model = AgglomerativeClustering(n_clusters=k, metric="euclidean", linkage="ward")
+        labels = model.fit_predict(X_unit)
+    elif alg == "agglomerative":
+        if metric == "cosine":
+            sim = np.clip(X_unit @ X_unit.T, -1.0, 1.0)
+            dist = 1.0 - sim
+            np.fill_diagonal(dist, 0.0)
+            try:
+                model = AgglomerativeClustering(n_clusters=k, metric="precomputed", linkage="average")
+            except TypeError:
+                model = AgglomerativeClustering(n_clusters=k, affinity="precomputed", linkage="average")
+            labels = model.fit_predict(dist)
+        else:
+            model = AgglomerativeClustering(n_clusters=k, linkage="average")
+            labels = model.fit_predict(features)
+    elif alg == "spectral":
+        sim = np.clip(X_unit @ X_unit.T, -1.0, 1.0)
+        affinity = np.clip((sim + 1.0) / 2.0, 0.0, 1.0)
+        np.fill_diagonal(affinity, 1.0)
+        model = SpectralClustering(
+            n_clusters=k,
+            affinity="precomputed",
+            random_state=seed,
+            assign_labels="kmeans",
+        )
+        labels = model.fit_predict(affinity)
+    else:
+        raise ValueError(
+            f"Unknown PLM clustering algorithm '{algorithm}'. "
+            "Choose from: kmeans, agglomerative, ward, spectral."
+        )
+
+    clusters: Dict[str, List[str]] = {}
+    for cluster_id in sorted(set(int(x) for x in labels)):
+        idx = [i for i, lab in enumerate(labels) if int(lab) == cluster_id]
+        if not idx:
+            continue
+        sub_feats = features[idx]
+        centroid = sub_feats.mean(axis=0, keepdims=True)
+        dists_to_centroid = np.linalg.norm(sub_feats - centroid, axis=1)
+        # Break ties deterministically by taxon name
+        best_local = min(range(len(idx)), key=lambda j: (float(dists_to_centroid[j]), taxa_list[idx[j]]))
+        rep = taxa_list[idx[best_local]]
+        members = [rep] + sorted(taxa_list[i] for i in idx if taxa_list[i] != rep)
+        clusters[rep] = members
+
+    return clusters
+
+
+def sweep_plm_clusterings(
+    taxa: Sequence[str],
+    embeddings: np.ndarray,
+    distance: np.ndarray,
+    algorithm: str = "kmeans",
+    metric: str = "cosine",
+    k_min: int = 2,
+    k_max: int = 30,
+    min_cluster_size: int = 10,
+    min_retained: float = 0.70,
+    seed: int = 42,
+    verbose: bool = True,
+) -> Dict[str, Any]:
+    """Sweep ``k`` across ``[k_min, k_max]`` in PLM embedding space and pick optimal silhouette.
+
+    Evaluates each candidate ``k`` by full-dataset silhouette score as well as
+    constrained silhouette (clusters >= ``min_cluster_size``), selecting the ``k``
+    with the highest silhouette score.
+    """
+    n_taxa = len(taxa)
+    lower_k = max(2, int(k_min))
+    upper_k = min(int(k_max), n_taxa - 1)
+    if upper_k < lower_k:
+        upper_k = max(2, n_taxa - 1)
+        lower_k = min(lower_k, upper_k)
+
+    spaces = {"esm2": distance}
+    candidates: List[Dict[str, Any]] = []
+    tool_label = f"plm_{algorithm}"
+
+    for k in range(lower_k, upper_k + 1):
+        clusters = plm_cluster(taxa, embeddings, k=k, algorithm=algorithm, metric=metric, seed=seed)
+        labels = clusters_to_labels(clusters, taxa)
+        scored = score_partition(clusters, taxa, spaces, min_cluster_size)
+
+        raw_sil: Optional[float] = None
+        if len(set(labels[labels >= 0].tolist())) >= 2 and n_taxa > len(set(labels[labels >= 0].tolist())):
+            raw_sil = _silhouette_precomputed(distance, labels)
+
+        scored["silhouette_all"] = round(raw_sil, 4) if raw_sil is not None else None
+        if scored["silhouette"].get("esm2") is None and raw_sil is not None:
+            scored["silhouette"]["esm2"] = raw_sil
+
+        scored.update({
+            "tool": tool_label,
+            "algorithm": algorithm,
+            "k": k,
+            "threshold": k,
+            "threshold_kind": "k",
+            "coverage": 1.0,
+            "clusters": clusters,
+        })
+        candidates.append(scored)
+        if verbose:
+            sil_val = raw_sil if raw_sil is not None else scored["silhouette"].get("esm2")
+            sil_str = "None" if sil_val is None else f"{sil_val:+.3f}"
+            print(
+                f"[Cluster] {tool_label} k={k:>2} -> "
+                f"{scored['n_clusters']:>3} clusters, "
+                f"{scored['clusters_at_or_above_min']:>3} >= {min_cluster_size}, "
+                f"retained {scored['retained_fraction']:.0%}, "
+                f"silhouette={sil_str}"
+            )
+
+    if not candidates:
+        return {
+            "selected": None,
+            "reason": "no candidate k values could be evaluated",
+            "relaxed_constraints": True,
+            "candidates": [],
+        }
+
+    # Prefer candidates that keep at least 2 clusters of tree-eligible size (>= TREE_MIN_TAXA)
+    # when the dataset is large enough, and pick the k that maximises the silhouette score.
+    feasible = [
+        c for c in candidates
+        if c["retained_fraction"] >= min_retained and c["clusters_at_or_above_min"] >= 2
+    ]
+    tree_viable = [
+        c for c in candidates
+        if sum(1 for m in c["clusters"].values() if len(m) >= TREE_MIN_TAXA) >= 2
+    ]
+    pool = feasible or tree_viable or candidates
+    relaxed = not feasible
+
+    def _plm_sil(cand: Dict[str, Any]) -> float:
+        val = cand.get("silhouette_all")
+        if val is None:
+            val = cand["silhouette"].get("esm2")
+        return float(val) if val is not None else -1.0
+
+    best = max(
+        pool,
+        key=lambda c: (
+            _plm_sil(c),
+            c["retained_fraction"],
+            c["clusters_at_or_above_min"],
+        ),
+    )
+
+    return {
+        "selected": best,
+        "relaxed_constraints": relaxed,
+        "reason": (
+            f"optimal PLM ({algorithm}) silhouette score ({_plm_sil(best):+.3f}) at k={best['k']} "
+            f"(evaluated k={lower_k}..{upper_k})"
+        ),
+        "recommendation": None,
+        "disagreement": None,
+        "alternative": suggest_alternative(candidates, best, min_cluster_size=min_cluster_size),
+        "constraints": {
+            "min_cluster_size": min_cluster_size,
+            "min_retained": min_retained,
+            "k_min": lower_k,
+            "k_max": upper_k,
+        },
+        "candidates": candidates,
+    }
 
 
 def identity_distance_matrix(
@@ -555,6 +788,39 @@ def partition_shape(labels: np.ndarray, min_cluster_size: int) -> Dict[str, Any]
     }
 
 
+def _silhouette_precomputed(distance: np.ndarray, labels: np.ndarray) -> Optional[float]:
+    """Compute mean silhouette score on a precomputed distance matrix (sklearn with NumPy fallback)."""
+    try:
+        from sklearn.metrics import silhouette_score
+        return float(silhouette_score(distance, labels, metric="precomputed"))
+    except ImportError:
+        pass
+    except Exception:
+        return None
+
+    unique = sorted(set(int(x) for x in labels if int(x) >= 0))
+    n = len(labels)
+    if len(unique) < 2 or n <= len(unique):
+        return None
+    scores = []
+    for i in range(n):
+        ci = int(labels[i])
+        if ci < 0:
+            continue
+        same = [j for j in range(n) if int(labels[j]) == ci and j != i]
+        if not same:
+            scores.append(0.0)
+            continue
+        a_i = float(np.mean(distance[i, same]))
+        b_i = min(
+            float(np.mean(distance[i, [j for j in range(n) if int(labels[j]) == cj]]))
+            for cj in unique if cj != ci
+        )
+        denom = max(a_i, b_i)
+        scores.append((b_i - a_i) / denom if denom > 0 else 0.0)
+    return float(np.mean(scores)) if scores else None
+
+
 def silhouette_for_partition(
     labels: np.ndarray,
     distance: np.ndarray,
@@ -565,8 +831,6 @@ def silhouette_for_partition(
     Small and singleton clusters are excluded from the score rather than allowed to
     inflate it; a partition of mostly singletons would otherwise look excellent.
     """
-    from sklearn.metrics import silhouette_score
-
     sizes: Dict[int, int] = {}
     for label in labels:
         if label >= 0:
@@ -578,10 +842,7 @@ def silhouette_for_partition(
     if len(set(kept_labels.tolist())) < 2:
         return None
     sub = distance[np.ix_(keep, keep)]
-    try:
-        return float(silhouette_score(sub, kept_labels, metric="precomputed"))
-    except Exception:
-        return None
+    return _silhouette_precomputed(sub, kept_labels)
 
 
 def score_partition(
@@ -747,6 +1008,9 @@ def _flags_for(candidate: Dict[str, Any]) -> str:
     kind = candidate.get("threshold_kind")
     coverage = candidate["coverage"]
     threshold = candidate["threshold"]
+    if kind == "k":
+        alg = candidate.get("algorithm", "kmeans")
+        return f"--cluster-mode plm --plm-algorithm {alg} --plm-k {int(threshold)}"
     if kind == "tmscore":
         return f"--cluster-tmscore {threshold} --cluster-coverage {coverage}"
     if kind == "min_seq_id":
@@ -834,6 +1098,8 @@ def save_partition(clusters: Dict[str, List[str]], path: str) -> str:
 
 def _cluster_tag(threshold_kind: str, threshold: float) -> str:
     """Short directory suffix encoding how a partition was produced."""
+    if threshold_kind == "k":
+        return f"k{int(threshold)}"
     return {"evalue": f"e{threshold:g}", "tmscore": f"tm{threshold:g}",
             "min_seq_id": f"id{threshold:g}"}.get(threshold_kind, f"t{threshold:g}")
 
@@ -914,6 +1180,12 @@ def partition_structures_by_similarity(
     min_cluster_size: int = 10,
     min_retained: float = 0.70,
     embeddings_npz: Optional[str] = None,
+    plm_algorithm: str = "kmeans",
+    plm_k: Optional[int] = None,
+    plm_k_min: int = 2,
+    plm_k_max: int = 30,
+    plm_metric: str = "cosine",
+    embed_model: str = "esm2",
     min_length: int = 50,
     min_length_frac: float = 0.4,
     recurse: bool = False,
@@ -992,9 +1264,11 @@ def partition_structures_by_similarity(
     taxa = [t for t in kept if t in taxon_to_file]
 
     # 3. Cluster, either at the configured operating point or across a sweep.
+    use_plm = mode == "plm"
     use_structural = mode in ("structural", "both")
-    threshold_kind = "evalue" if (use_structural and alignment_type != 1) else (
-        "tmscore" if use_structural else "min_seq_id")
+    threshold_kind = "k" if use_plm else (
+        "evalue" if (use_structural and alignment_type != 1) else (
+            "tmscore" if use_structural else "min_seq_id"))
 
     def _structural(run_dir, threshold, cov):
         return foldseek_cluster(qc_structures, run_dir, evalue=threshold, coverage=cov,
@@ -1006,8 +1280,94 @@ def partition_structures_by_similarity(
 
     cluster_fn = _structural if use_structural else _sequence
     selection: Dict[str, Any] = {}
+    emb_by_taxon: Dict[str, np.ndarray] = {}
 
-    if sweep:
+    if use_plm:
+        if not embeddings_npz or not os.path.isfile(embeddings_npz):
+            from viral_phylo.binaries import find_torch_python
+            embed_dir = os.path.join(work, "plm_embed")
+            os.makedirs(embed_dir, exist_ok=True)
+            embed_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "embeddings.py")
+            target_py = find_torch_python()
+            print(f"[Cluster] Extracting PLM embeddings ({embed_model}) for PLM clustering...")
+            cmd = [
+                target_py, embed_script,
+                "-i", qc_fasta,
+                "-o", embed_dir,
+                "-m", embed_model,
+                "-c", "upgma",
+                "--metric", plm_metric,
+                "-p", "plm_cluster",
+                "--batch-size", "1",
+            ]
+            sub_env = dict(os.environ)
+            sub_env["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+            repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            sub_env["PYTHONPATH"] = repo_root + os.pathsep + sub_env.get("PYTHONPATH", "")
+            subprocess.run(cmd, check=True, env=sub_env)
+            embeddings_npz = os.path.join(embed_dir, f"plm_cluster_embeddings_{embed_model}.npz")
+
+        emb_taxa, emb_vecs, emb_dist = load_embedding_space(embeddings_npz, taxa=taxa, metric=plm_metric)
+        if len(emb_taxa) < 2:
+            raise RuntimeError(f"Need at least 2 embedded taxa for PLM clustering, found {len(emb_taxa)}.")
+        taxa = emb_taxa
+        emb_by_taxon = {t: emb_vecs[i] for i, t in enumerate(emb_taxa)}
+
+        if plm_k is not None and int(plm_k) > 0 and not sweep:
+            threshold_used = max(2, min(int(plm_k), len(taxa)))
+            coverage_used = 1.0
+            print(f"[Cluster] PLM ({embed_model}) clustering with {plm_algorithm} at fixed k={threshold_used}...")
+            clusters = plm_cluster(taxa, emb_vecs, k=threshold_used, algorithm=plm_algorithm, metric=plm_metric)
+            scored = score_partition(clusters, taxa, {"esm2": emb_dist}, min_cluster_size)
+            labels = clusters_to_labels(clusters, taxa)
+            raw_sil = None
+            if len(set(labels[labels >= 0].tolist())) >= 2 and len(taxa) > len(set(labels[labels >= 0].tolist())):
+                raw_sil = _silhouette_precomputed(emb_dist, labels)
+            scored["silhouette_all"] = round(raw_sil, 4) if raw_sil is not None else None
+            if scored["silhouette"].get("esm2") is None and raw_sil is not None:
+                scored["silhouette"]["esm2"] = raw_sil
+            scored.update({
+                "tool": f"plm_{plm_algorithm}",
+                "algorithm": plm_algorithm,
+                "k": threshold_used,
+                "threshold": threshold_used,
+                "threshold_kind": "k",
+                "coverage": coverage_used,
+            })
+            selection = {
+                "selected": scored,
+                "spaces": {"used": ["esm2"], "primary": "esm2"},
+                "reason": f"fixed k={threshold_used} requested for PLM ({plm_algorithm}) clustering",
+            }
+            sil_str = f" (silhouette {raw_sil:+.3f})" if raw_sil is not None else ""
+            print(f"[Cluster] {scored['n_clusters']} clusters, {scored['clusters_at_or_above_min']} with "
+                  f"{min_cluster_size}+ taxa, {scored['retained_fraction']:.0%} of taxa retained{sil_str}.")
+        else:
+            print(f"[Cluster] Sweeping PLM ({embed_model}) {plm_algorithm} clustering across "
+                  f"k={plm_k_min}..{min(plm_k_max, len(taxa) - 1)} to find optimal silhouette score...")
+            plm_sel = sweep_plm_clusterings(
+                taxa, emb_vecs, emb_dist,
+                algorithm=plm_algorithm, metric=plm_metric,
+                k_min=plm_k_min, k_max=plm_k_max,
+                min_cluster_size=min_cluster_size, min_retained=min_retained,
+            )
+            chosen = plm_sel.get("selected")
+            if not chosen:
+                raise RuntimeError("PLM clustering sweep produced no usable partition")
+            clusters = chosen["clusters"]
+            threshold_used = int(chosen["k"])
+            coverage_used = 1.0
+            selection = {k: v for k, v in plm_sel.items() if k != "candidates"}
+            selection["spaces"] = {"used": ["esm2"], "primary": "esm2"}
+            selection["sweep"] = summarise_sweep(plm_sel.get("candidates", []))
+            sil_val = chosen.get("silhouette_all")
+            if sil_val is None:
+                sil_val = chosen["silhouette"].get("esm2")
+            sil_str = f" (silhouette {sil_val:+.3f})" if sil_val is not None else ""
+            print(f"[Cluster] Selected optimal k={threshold_used} ({plm_algorithm}): "
+                  f"{chosen['n_clusters']} clusters, {chosen['clusters_at_or_above_min']} with "
+                  f"{min_cluster_size}+ taxa, {chosen['retained_fraction']:.0%} of taxa retained{sil_str}.")
+    elif sweep:
         spaces: Dict[str, np.ndarray] = {}
         if embeddings_npz and os.path.isfile(embeddings_npz):
             emb_taxa, emb_dist = embedding_distance_matrix(embeddings_npz)
@@ -1091,7 +1451,9 @@ def partition_structures_by_similarity(
     # An e-value shifts with database size, so record what it was measured against.
     selection["operating_point"] = {
         "mode": mode, "threshold_kind": threshold_kind, "threshold": threshold_used,
-        "coverage": coverage_used, "alignment_type": alignment_type,
+        "coverage": coverage_used, "alignment_type": None if use_plm else alignment_type,
+        "plm_algorithm": plm_algorithm if use_plm else None,
+        "plm_k_selection": ("fixed" if (plm_k is not None and int(plm_k) > 0 and not sweep) else "silhouette_auto") if use_plm else None,
         "taxa_clustered": len(taxa),
         "note": ("e-values depend on database size and are not comparable across datasets "
                  "of different sizes" if threshold_kind == "evalue" else None),
@@ -1186,28 +1548,64 @@ def partition_structures_by_similarity(
             if needs_split:
                 attempts = []
                 accepted = None
-                for candidate in recursion_schedule(threshold_kind, threshold_at):
-                    sub_dir = os.path.join(work, f"recurse_{name}_{_cluster_tag(threshold_kind, candidate)}")
-                    try:
-                        if use_structural:
-                            sub = foldseek_cluster(
-                                c_structs, sub_dir, evalue=candidate, coverage=coverage_used,
-                                alignment_type=alignment_type,
-                                tmscore_threshold=candidate if threshold_kind == "tmscore" else tmscore,
-                                threads=threads)
-                        else:
-                            sub_fasta = write_fasta({t: kept[t] for t in members if t in kept},
-                                                    os.path.join(sub_dir, "sub.fasta"))
-                            sub = mmseqs_cluster(sub_fasta, sub_dir, candidate, coverage_used, threads=threads)
-                    except Exception as exc:
-                        print(f"  [!] Notice: re-clustering {name} at {threshold_kind}={candidate:g} failed: {exc}")
-                        continue
-                    kept_frac = fraction_kept(sub, len(members))
-                    attempts.append({"threshold": candidate, "sub_clusters": len(sub),
-                                     "kept_fraction": round(kept_frac, 3)})
-                    if len(sub) > 1 and kept_frac >= recurse_min_kept:
-                        accepted = (candidate, sub, kept_frac)
-                        break
+                if use_plm:
+                    sub_taxa = [t for t in members if t in emb_by_taxon]
+                    sub_vecs = np.asarray([emb_by_taxon[t] for t in sub_taxa], dtype=np.float64)
+                    best_sub_sil = -2.0
+                    for candidate in (2, 3, 4, 5):
+                        if candidate >= len(sub_taxa):
+                            break
+                        try:
+                            sub = plm_cluster(
+                                sub_taxa, sub_vecs, k=candidate,
+                                algorithm=plm_algorithm, metric=plm_metric,
+                            )
+                        except Exception as exc:
+                            print(f"  [!] Notice: re-clustering {name} at k={candidate} failed: {exc}")
+                            continue
+                        kept_frac = fraction_kept(sub, len(members))
+                        sub_sil = None
+                        try:
+                            from sklearn.metrics import silhouette_score
+                            sub_labels = clusters_to_labels(sub, sub_taxa)
+                            if len(set(sub_labels.tolist())) >= 2:
+                                sub_sil = float(silhouette_score(sub_vecs, sub_labels, metric=plm_metric))
+                        except Exception:
+                            sub_sil = None
+                        attempts.append({
+                            "threshold": candidate,
+                            "sub_clusters": len(sub),
+                            "kept_fraction": round(kept_frac, 3),
+                            "silhouette": round(sub_sil, 4) if sub_sil is not None else None,
+                        })
+                        if len(sub) > 1 and kept_frac >= recurse_min_kept:
+                            score = sub_sil if sub_sil is not None else 0.0
+                            if accepted is None or score > best_sub_sil:
+                                best_sub_sil = score
+                                accepted = (candidate, sub, kept_frac)
+                else:
+                    for candidate in recursion_schedule(threshold_kind, threshold_at):
+                        sub_dir = os.path.join(work, f"recurse_{name}_{_cluster_tag(threshold_kind, candidate)}")
+                        try:
+                            if use_structural:
+                                sub = foldseek_cluster(
+                                    c_structs, sub_dir, evalue=candidate, coverage=coverage_used,
+                                    alignment_type=alignment_type,
+                                    tmscore_threshold=candidate if threshold_kind == "tmscore" else tmscore,
+                                    threads=threads)
+                            else:
+                                sub_fasta = write_fasta({t: kept[t] for t in members if t in kept},
+                                                        os.path.join(sub_dir, "sub.fasta"))
+                                sub = mmseqs_cluster(sub_fasta, sub_dir, candidate, coverage_used, threads=threads)
+                        except Exception as exc:
+                            print(f"  [!] Notice: re-clustering {name} at {threshold_kind}={candidate:g} failed: {exc}")
+                            continue
+                        kept_frac = fraction_kept(sub, len(members))
+                        attempts.append({"threshold": candidate, "sub_clusters": len(sub),
+                                         "kept_fraction": round(kept_frac, 3)})
+                        if len(sub) > 1 and kept_frac >= recurse_min_kept:
+                            accepted = (candidate, sub, kept_frac)
+                            break
 
                 if accepted is None:
                     # Either nothing divided it, or every division shattered it. Keep the

@@ -177,6 +177,8 @@ def read_json_file(file_path):
 
 def extract_metadata_from_structures(structure_dir):
     """Fallback: extract basic metadata (length, avg pLDDT/B-factor) directly from structure files."""
+    from viral_phylo.structures import parse_structure_ca
+
     extensions = ("*.pdb", "*.cif", "*.mmcif", "*.ent")
     files = []
     for ext in extensions:
@@ -186,41 +188,15 @@ def extract_metadata_from_structures(structure_dir):
     records = []
     for fpath in files:
         stem = Path(fpath).stem
-        # Clean common prefixes/suffixes
         clean_id = stem.replace("CF-", "").replace("_relaxed", "").replace(".cif", "").replace(".pdb", "")
-        
-        ca_count = 0
-        b_factors = []
-        is_cif = fpath.endswith(".cif") or fpath.endswith(".mmcif")
-        
-        try:
-            with open(fpath, "r", errors="ignore") as f:
-                for line in f:
-                    if is_cif:
-                        if line.startswith("ATOM") or line.startswith("HETATM"):
-                            parts = line.split()
-                            # Check for CA atom (usually col 3 in CIF)
-                            if len(parts) > 10 and ("CA" in parts[3] or parts[3] == "CA"):
-                                ca_count += 1
-                                try:
-                                    # CIF B-factor is often near column 14 or 15
-                                    b_val = float(parts[-4]) if len(parts) >= 15 else float(parts[14])
-                                    b_factors.append(b_val)
-                                except Exception:
-                                    pass
-                    else:
-                        if line.startswith("ATOM") and len(line) >= 54:
-                            atom_name = line[12:16].strip()
-                            if atom_name == "CA":
-                                ca_count += 1
-                                try:
-                                    bf = float(line[60:66].strip())
-                                    b_factors.append(bf)
-                                except Exception:
-                                    pass
-        except Exception:
-            pass
 
+        try:
+            trace = parse_structure_ca(fpath)
+        except Exception:
+            trace = []
+
+        ca_count = len(trace)
+        b_factors = [float(res[3]) for res in trace if isinstance(res[3], (int, float))]
         avg_plddt = round(sum(b_factors) / len(b_factors), 1) if b_factors else 75.0
         records.append({
             "id": clean_id,

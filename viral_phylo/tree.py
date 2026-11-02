@@ -33,8 +33,8 @@ def resolve_aa_alignment(alignment_file: str, alignment_aa: str = None):
 
 
 def _run_iqtree_maybe_guided(cmd, alignment, out_prefix, alphabet, guide, matrix_path=None,
-                             threads="8", seed=1):
-    """Run an IQ-TREE command, optionally from a FastTree starting tree.
+                             threads="8", seed=1, guide_method="fasttree"):
+    """Run an IQ-TREE command, optionally from a FastTree or FoldMason starting tree.
 
     Records what happened in ``<out_prefix>.start_tree.json`` whenever guidance was
     requested: whether a starting tree was used, how many polytomies were resolved,
@@ -47,12 +47,14 @@ def _run_iqtree_maybe_guided(cmd, alignment, out_prefix, alphabet, guide, matrix
     from viral_phylo.start_trees import make_start_tree
 
     record = make_start_tree(alignment, out_prefix + ".start_tree.nwk", alphabet,
-                             matrix_path=matrix_path, threads=threads, seed=seed)
+                             matrix_path=matrix_path, threads=threads, seed=seed,
+                             guide_method=guide_method)
     if record["used"]:
         # -keep-ident: IQ-TREE otherwise drops duplicate sequences and then rejects a
         # starting tree that still contains them.
         guided = cmd + ["-t", record["path"], "-keep-ident"]
-        print(f"[IQ-TREE {alphabet}] Starting from a FastTree tree "
+        src_label = "FoldMason guide" if guide_method == "foldmason" else "FastTree"
+        print(f"[IQ-TREE {alphabet}] Starting from a {src_label} tree "
               f"({record['polytomies_resolved']} polytomies resolved):")
         print("  " + " ".join(guided))
         try:
@@ -72,9 +74,8 @@ def _run_iqtree_maybe_guided(cmd, alignment, out_prefix, alphabet, guide, matrix
         subprocess.run(cmd, check=True)
         record["iqtree_command"] = " ".join(cmd)
 
-    import json as _json
     with open(out_prefix + ".start_tree.json", "w", encoding="utf-8") as handle:
-        _json.dump(record, handle, indent=2)
+        json.dump(record, handle, indent=2)
     return record
 
 
@@ -96,12 +97,16 @@ def build_tree(
     guide_trees: bool = False,
     guide_min_taxa: int = 80,
     guide_seed: int = 1,
+    guide_tree_method: str = "fasttree",
 ):
     """Build structural and/or amino acid phylogeny using FoldMason or IQ-TREE.
 
     With ``guide_trees``, IQ-TREE runs on alignments of at least ``guide_min_taxa``
-    taxa start from a repaired and validated FastTree tree (see start_trees.py). A
-    guided run that fails is rerun unguided, so this can never lose a tree.
+    taxa start from a repaired and validated FastTree or FoldMason tree (see
+    start_trees.py). When ``guide_tree_method == "foldmason"``, any cluster with a
+    ``foldmason.fasta.nw`` guide tree uses it regardless of ``guide_min_taxa`` (as
+    long as it has >= 4 taxa). A guided run that fails is rerun unguided, so this
+    can never lose a tree.
     """
     os.makedirs(output_dir, exist_ok=True)
 
@@ -249,7 +254,8 @@ def build_tree(
 
     seq_count = count_fasta_seqs(alignment_file)
     is_large = seq_count >= 80
-    use_guide = bool(guide_trees) and seq_count >= guide_min_taxa and not fast
+    min_for_guide = 4 if guide_tree_method == "foldmason" else guide_min_taxa
+    use_guide = bool(guide_trees) and seq_count >= min_for_guide and not fast
 
     # IQ-TREE refuses ultrafast bootstrap and SH-aLRT below 4 sequences ("It makes no
     # sense to perform bootstrap with less than 4 sequences") and exits non-zero, which
@@ -312,7 +318,8 @@ def build_tree(
         print(f"\n[IQ-TREE 3Di] Running structural phylogeny inference:")
         print("  " + " ".join(cmd))
         _run_iqtree_maybe_guided(cmd, alignment_file, out_prefix, "3di", use_guide,
-                                 matrix_path=matrix_path.split(",")[0], threads=threads, seed=guide_seed)
+                                 matrix_path=matrix_path.split(",")[0], threads=threads, seed=guide_seed,
+                                 guide_method=guide_tree_method)
 
         treefile = f"{out_prefix}.treefile"
         results["3di"] = treefile
@@ -354,7 +361,8 @@ def build_tree(
             print(f"\n[IQ-TREE AA] Running amino acid sequence phylogeny inference:")
             print("  " + " ".join(cmd_aa))
             _run_iqtree_maybe_guided(cmd_aa, alignment_aa, aa_prefix, "aa", use_guide,
-                                     threads=threads, seed=guide_seed)
+                                     threads=threads, seed=guide_seed,
+                                     guide_method=guide_tree_method)
 
             aa_treefile = f"{aa_prefix}.treefile"
             results["aa"] = aa_treefile

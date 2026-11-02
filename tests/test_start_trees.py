@@ -125,6 +125,35 @@ class TestGuideTreesDefault(unittest.TestCase):
         self.assertTrue(parser.parse_args(["pipeline"]).guide_trees)
         self.assertFalse(parser.parse_args(["pipeline", "--no-guide-trees"]).guide_trees)
         self.assertEqual(parser.parse_args(["pipeline"]).guide_tree_min_taxa, 80)
+        self.assertEqual(parser.parse_args(["pipeline"]).guide_tree_method, "fasttree")
+        self.assertEqual(parser.parse_args(["pipeline", "--guide-tree-method", "foldmason"]).guide_tree_method, "foldmason")
+        self.assertEqual(parser.parse_args(["tree", "--guide-tree-method", "foldmason"]).guide_tree_method, "foldmason")
+
+    def test_foldmason_guide_tree_repaired_and_validated(self):
+        from viral_phylo.start_trees import make_start_tree
+        with tempfile.TemporaryDirectory() as d:
+            aln = Path(d) / "foldmason.fasta_3di.fa"
+            aln.write_text(ALN)
+            # Rooted cladogram without branch lengths, just as FoldMason emits
+            nw = Path(d) / "foldmason.fasta.nw"
+            nw.write_text("(((t1,t2),t3),((t4,t5),t6));")
+            out_nwk = Path(d) / "start.nwk"
+            rec = make_start_tree(str(aln), str(out_nwk), "3di", guide_method="foldmason")
+            self.assertTrue(rec["used"], rec.get("reason"))
+            self.assertEqual(rec["source"], "foldmason")
+            repaired = Phylo.read(str(out_nwk), "newick")
+            self.assertTrue(_binary(repaired))
+            self.assertEqual(sorted(x.name for x in repaired.get_terminals()), [f"t{i}" for i in range(1, 7)])
+
+    def test_foldmason_guide_tree_missing_falls_back_cleanly(self):
+        from viral_phylo.start_trees import make_start_tree
+        with tempfile.TemporaryDirectory() as d:
+            aln = Path(d) / "foldmason.fasta_3di.fa"
+            aln.write_text(ALN)
+            out_nwk = Path(d) / "start.nwk"
+            rec = make_start_tree(str(aln), str(out_nwk), "3di", guide_method="foldmason")
+            self.assertFalse(rec["used"])
+            self.assertIn("not found", rec["reason"])
 
 
 class TestPreflightWithoutFastTree(unittest.TestCase):

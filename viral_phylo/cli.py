@@ -11,6 +11,22 @@ import time
 from pathlib import Path
 from typing import Optional
 
+if not hasattr(argparse, "BooleanOptionalAction"):
+    class _BooleanOptionalAction(argparse.Action):
+        def __init__(self, option_strings, dest, default=None, **kwargs):
+            opts = []
+            for opt in option_strings:
+                opts.append(opt)
+                if opt.startswith("--"):
+                    opts.append(f"--no-{opt[2:]}")
+            kwargs.pop("nargs", None)
+            super().__init__(option_strings=opts, dest=dest, nargs=0, default=default, **kwargs)
+
+        def __call__(self, parser, namespace, values, option_string=None):
+            setattr(namespace, self.dest, not (option_string or "").startswith("--no-"))
+
+    argparse.BooleanOptionalAction = _BooleanOptionalAction
+
 from viral_phylo.binaries import (
     find_iqtree_bin,
     find_foldmason_bin,
@@ -19,20 +35,19 @@ from viral_phylo.binaries import (
 )
 from viral_phylo.matrices import ensure_matrix_file, ensure_3di_matrix
 from viral_phylo.fetch import fetch_structures, fetch_alphafold_structures
-from viral_phylo.alignment import align_structures
+from viral_phylo.alignment import align_structures, parse_alignment_fasta as cluster_parse_fasta
 from viral_phylo.clustering import (
     alignment_gap_fraction,
     full_set_alignment_is_usable,
-    parse_fasta as cluster_parse_fasta,
     partition_structures_by_similarity,
     qc_structure_dir,
 )
 from viral_phylo.manifest import RunManifest, write_alignment_info
 from viral_phylo.structures import extract_ca_dict, write_ca_bundle
-from viral_phylo.tree import build_tree
+from viral_phylo.tree import build_tree, resolve_aa_alignment
 from viral_phylo.parallel_trees import plan_tree_jobs, run_tree_jobs
 from viral_phylo.metadata import parse_metadata
-from viral_phylo.web.report import build_tree_report
+from viral_phylo.web.report import build_tree_report, package_run_report
 
 
 def pipeline_preflight(args, manifest) -> None:
@@ -70,12 +85,17 @@ def pipeline_preflight(args, manifest) -> None:
         if not ok:
             blockers.append(f"'{tool}' not found (needed for {why})")
     if getattr(args, "guide_trees", False) and "fasttree" not in methods and "iqtree" in methods:
-        # Starting trees are an optimisation: without FastTree IQ-TREE simply runs unguided,
-        # so this must not block the run.
-        checks["guide_trees_fasttree"] = bool(find_fasttree_bin())
-        if not checks["guide_trees_fasttree"]:
-            warnings.append("no FastTree/VeryFastTree found: IQ-TREE starting trees are disabled and large "
-                            "clusters will run unguided")
+        guide_m = getattr(args, "guide_tree_method", "fasttree")
+        if guide_m == "fasttree":
+            # Starting trees are an optimisation: without FastTree IQ-TREE simply runs unguided,
+            # so this must not block the run.
+            checks["guide_trees_fasttree"] = bool(find_fasttree_bin())
+            if not checks["guide_trees_fasttree"]:
+                warnings.append("no FastTree/VeryFastTree found: IQ-TREE starting trees are disabled and large "
+                                "clusters will run unguided")
+        elif guide_m == "foldmason" and getattr(args, "aligner", "foldmason") != "foldmason":
+            warnings.append("--guide-tree-method foldmason requires FoldMason alignments (foldmason.fasta.nw); "
+                            "with --aligner mafft, clusters will run unguided")
     if "fasttree" in methods:
         ft = find_fasttree_bin()
         checks["fasttree"] = bool(ft)
@@ -89,7 +109,11 @@ def pipeline_preflight(args, manifest) -> None:
     if args.aligner == "mafft" and not os.path.isfile(getattr(args, "mafft_matrix", "")):
         blockers.append(f"MAFFT 3Di matrix '{args.mafft_matrix}' not found - launch from the repository root")
 
-    if getattr(args, "embed", False):
+    need_embed = getattr(args, "embed", False) or (
+        getattr(args, "multi_alignment", False)
+        and getattr(args, "cluster_mode", "structural") == "plm"
+    )
+    if need_embed:
         py = find_torch_python()
         probe = probe_torch_python(py)
         checks["embedding_interpreter"] = {"python": py, **{k: probe[k] for k in
@@ -165,10 +189,13 @@ def build_cli_parser() -> argparse.ArgumentParser:
     p_tree.add_argument("-p", "--prefix", default="viral_tree", help="Tree output filename prefix")
     p_tree.add_argument("--iqtree-bin", default=None, help="Path to iqtree binary")
     p_tree.add_argument("--guide-trees", action=argparse.BooleanOptionalAction, default=True,
-                        help="Start IQ-TREE from a validated VeryFastTree/FastTree tree on alignments of at least "
+                        help="Start IQ-TREE from a validated starting/guide tree on alignments of at least "
                              "--guide-tree-min-taxa taxa (default: on). A guided run that fails is rerun unguided.")
     p_tree.add_argument("--guide-tree-min-taxa", type=int, default=80,
                         help="Smallest alignment given a starting tree (default: 80)")
+    p_tree.add_argument("--guide-tree-method", choices=["fasttree", "foldmason"], default="fasttree",
+                        help="Starting/guide tree source when --guide-trees is enabled: 'fasttree' (default) "
+                             "or 'foldmason' (uses foldmason.fasta.nw from the alignment directory).")
 
     # Subcommand: embed (PLM Embeddings & Hierarchical Clustering)
     p_embed = subparsers.add_parser("embed", help="Extract PLM embeddings (ESM-2 / ESM-C) and construct hierarchical clustering trees.")
@@ -183,11 +210,12 @@ def build_cli_parser() -> argparse.ArgumentParser:
     p_embed.add_argument("-t", "--threads", default="8",
                          help="Maximum CPU threads for embedding and clustering (default: 8; 'AUTO' = every core)")
 
-    # Subcommand: report (visualise an existing tree file)
-    p_report = subparsers.add_parser("report", help="Build a standalone interactive HTML report for an existing phylogenetic tree file.")
-    p_report.add_argument("-t", "--tree", required=True, help="Tree file in Newick or NEXUS format (e.g. .treefile, .nwk, .tre, .nex)")
+    # Subcommand: report (visualise an existing tree file or package a completed run directory)
+    p_report = subparsers.add_parser("report", help="Build a standalone interactive HTML report for an existing phylogenetic tree file, or package a completed run directory into a portable .zip archive.")
+    p_report.add_argument("-t", "--tree", default=None, help="Tree file in Newick or NEXUS format (e.g. .treefile, .nwk, .tre, .nex)")
+    p_report.add_argument("-r", "--run-dir", default=None, help="Completed workflow output directory to package into a self-contained report .zip archive")
     p_report.add_argument("-meta", "--metadata", default=None, help="Optional metadata table (.xlsx, .csv, .tsv, .json) with one row per leaf")
-    p_report.add_argument("-o", "--output", default=None, help="Output HTML path (default: <tree>_report.html next to the tree file)")
+    p_report.add_argument("-o", "--output", default=None, help="Output HTML path (or .zip path when --run-dir is used)")
     p_report.add_argument("--title", default=None, help="Report title (default: tree file name)")
 
     # Subcommand: pipeline (all-in-one)
@@ -239,10 +267,21 @@ def build_cli_parser() -> argparse.ArgumentParser:
 
     # Similarity clustering. Replaces the greedy coverage partitioner, which measured
     # similarity through the master alignment it was supposed to be improving.
-    p_pipe.add_argument("--cluster-mode", choices=["structural", "sequence", "coverage"], default="structural",
+    p_pipe.add_argument("--cluster-mode", choices=["structural", "sequence", "plm", "coverage"], default="structural",
                         help="How to partition before aligning: 'structural' (foldseek, 3Di+AA), "
-                             "'sequence' (mmseqs, amino acid), or 'coverage' (legacy greedy partitioner). "
+                             "'sequence' (mmseqs, amino acid), 'plm' (ESM-2 / ESM-C embeddings clustered via "
+                             "k-means / agglomerative / ward / spectral), or 'coverage' (legacy greedy partitioner). "
                              "Default: structural.")
+    p_pipe.add_argument("--plm-algorithm", "--cluster-alg", dest="plm_algorithm",
+                        choices=["kmeans", "agglomerative", "ward", "spectral"], default="kmeans",
+                        help="Clustering algorithm for --cluster-mode plm (default: kmeans).")
+    p_pipe.add_argument("--plm-k", "--cluster-k", dest="plm_k", type=int, default=None,
+                        help="Fixed number of clusters k for --cluster-mode plm. If omitted (default), k is "
+                             "selected automatically by picking the optimal silhouette score from the data.")
+    p_pipe.add_argument("--plm-k-min", type=int, default=2,
+                        help="Minimum candidate k when auto-selecting k by silhouette score (default: 2).")
+    p_pipe.add_argument("--plm-k-max", type=int, default=30,
+                        help="Maximum candidate k when auto-selecting k by silhouette score (default: 30).")
     p_pipe.add_argument("--cluster-evalue", type=float, default=1.0,
                         help="foldseek e-value for structural clustering (default: 1.0). Note an e-value "
                              "depends on database size and is not comparable across datasets of different sizes.")
@@ -311,6 +350,11 @@ def build_cli_parser() -> argparse.ArgumentParser:
     p_pipe.add_argument("--guide-tree-min-taxa", type=int, default=80,
                         help="Smallest alignment given a FastTree starting tree with --guide-trees (default: 80, "
                              "the size at which IQ-TREE switches to a fixed model, so no model selection is affected).")
+    p_pipe.add_argument("--guide-tree-method", choices=["fasttree", "foldmason"], default="fasttree",
+                        help="Guide tree source for per-cluster IQ-TREE runs when --guide-trees is enabled: "
+                             "'fasttree' (default, builds a VeryFastTree/FastTree starting tree) or 'foldmason' "
+                             "(uses each cluster's FoldMason guide tree foldmason.fasta.nw, repaired to strictly "
+                             "bifurcating and validated for IQ-TREE).")
     p_pipe.add_argument("--master-method", choices=["auto", "fasttree", "iqtree", "foldmason"], default="auto",
                         help="Tree method for the whole-set tree (default: auto). 'auto' picks IQ-TREE when the "
                              "whole-set alignment passes the usability gate and FastTree when it does not, so "
@@ -342,6 +386,12 @@ def build_cli_parser() -> argparse.ArgumentParser:
     p_pipe.add_argument("--embed-clustering", default="upgma", choices=["upgma", "nj", "average", "complete", "single", "ward"], help="Clustering method for PLM tree (default: upgma). Note: 'nj' produces no linkage matrix, so no silhouette profile is computed.")
     p_pipe.add_argument("--embed-metric", default="cosine", choices=["cosine", "euclidean", "l1", "cityblock", "manhattan"], help="Pairwise distance metric (default: cosine)")
     p_pipe.add_argument("-o", "--output-dir", default="glycoprotein_workflow", help="Parent output directory")
+    p_pipe.add_argument("--zip", action=argparse.BooleanOptionalAction, default=True,
+                        help="Package all report data (interactive HTML, 3D C-alpha backbones, alignments, trees, "
+                             "metadata, manifest) into a self-contained .zip archive upon completion (default: on). "
+                             "Use --no-zip to disable.")
+    p_pipe.add_argument("--zip-path", default=None,
+                        help="Custom output path for the report .zip archive (default: <output-dir>/<run_name>_report.zip).")
 
     return parser
 
@@ -381,6 +431,22 @@ def apply_thread_cap(threads):
     return cap
 
 
+def resolve_results_output_dir(out_dir: str) -> str:
+    """Place bare output folder names under ``results/<name>`` so runs never clutter the repo root.
+
+    Explicit paths containing a directory separator (e.g. ``results/my_run``,
+    ``/tmp/my_run``, ``./custom``) or existing directories are preserved as-is.
+    """
+    if not out_dir:
+        return os.path.join("results", "glycoprotein_workflow")
+    norm = out_dir.strip()
+    if os.path.sep in norm or (os.path.altsep and os.path.altsep in norm) or norm in (".", ".."):
+        return norm
+    if norm == "results" or os.path.exists(norm):
+        return norm
+    return os.path.join("results", norm)
+
+
 def main():
     parser = build_cli_parser()
     args = parser.parse_args()
@@ -400,6 +466,9 @@ def main():
         print(f"[!] --alrt {_alrt} is not valid: SH-aLRT needs at least 1000 replicates. "
               "Use --alrt 1000, or 0 to skip it.")
         return 2
+
+    if args.subcommand in ("fetch", "align", "tree", "embed", "search", "pipeline") and getattr(args, "output_dir", None):
+        args.output_dir = resolve_results_output_dir(args.output_dir)
 
     if args.subcommand == "fetch":
         source = getattr(args, "source", "viro3d")
@@ -434,16 +503,8 @@ def main():
             threads=args.threads,
         )
     elif args.subcommand == "tree":
-        aln_file = args.alignment
-        if os.path.isdir(aln_file):
-            for cand in ["mafft.fasta_3di.fa", "foldmason.fasta_3di.fa", "foldmason_3di.fa"]:
-                if os.path.isfile(os.path.join(aln_file, cand)):
-                    aln_file = os.path.join(aln_file, cand)
-                    break
-            else:
-                aln_file = os.path.join(aln_file, "foldmason.fasta_3di.fa")
         build_tree(
-            alignment_file=aln_file,
+            alignment_file=args.alignment,
             method=args.method,
             matrix=args.matrix,
             rate_het=args.rate_heterogeneity,
@@ -459,11 +520,10 @@ def main():
             fast=args.fast,
             guide_trees=args.guide_trees,
             guide_min_taxa=args.guide_tree_min_taxa,
+            guide_tree_method=args.guide_tree_method,
         )
     elif args.subcommand == "embed":
-        embed_script = os.path.join(os.path.dirname(__file__), "embed_and_cluster.py")
-        if not os.path.isfile(embed_script):
-            embed_script = "scripts/embed_and_cluster.py"
+        embed_script = os.path.join(os.path.dirname(__file__), "embeddings.py")
         target_py = find_torch_python()
         cmd = [
             target_py, embed_script,
@@ -479,6 +539,8 @@ def main():
         print(f"[PLM] Running embedding extraction using interpreter: {target_py}")
         sub_env = dict(os.environ)
         sub_env["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+        repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        sub_env["PYTHONPATH"] = repo_root + os.pathsep + sub_env.get("PYTHONPATH", "")
         subprocess.run(cmd, check=True, env=sub_env)
     elif args.subcommand == "search":
         from viral_phylo import search as fs
@@ -611,8 +673,14 @@ def main():
         print(f"[Search] next: viral-phylo pipeline --input-folder {mat['dir']} --output-dir <out> ...")
 
     elif args.subcommand == "report":
-        out = build_tree_report(args.tree, metadata_path=args.metadata, output_path=args.output, title=args.title)
-        print(f"[Report] Interactive tree report written to: file://{out.resolve()}")
+        if getattr(args, "run_dir", None):
+            out = package_run_report(args.run_dir, zip_path=args.output)
+            print(f"[Report] Self-contained run report archive written to: {out.resolve()}")
+        elif args.tree:
+            out = build_tree_report(args.tree, metadata_path=args.metadata, output_path=args.output, title=args.title)
+            print(f"[Report] Interactive tree report written to: file://{out.resolve()}")
+        else:
+            parser.error("report requires either -t/--tree <treefile> or -r/--run-dir <workflow_dir>")
     elif args.subcommand == "pipeline":
         out_base = args.output_dir
         aln_dir = os.path.join(out_base, "alignment")
@@ -762,20 +830,15 @@ def main():
             prefix = f"{args.qualifier}_tree"
 
         # 2b. Optional PLM embeddings. They run before clustering, so a --cluster-sweep
-        # in the same run scores its partitions with this run's embeddings, never
-        # stale ones left in the output directory by an earlier run.
+        # or --cluster-mode plm in the same run scores/builds its partitions with this
+        # run's embeddings, never stale ones left in the output directory by an earlier run.
         _t_align_start, _t_stage = _t_stage, time.time()
-        if getattr(args, "embed", False):
+        run_embed = getattr(args, "embed", False) or (use_similarity and cluster_mode == "plm")
+        if run_embed:
             print(f"\n[Pipeline] Extracting PLM embeddings ({args.embed_model}) & constructing hierarchical tree ({args.embed_clustering})...")
-            embed_script = os.path.join(os.path.dirname(__file__), "embed_and_cluster.py")
-            if not os.path.isfile(embed_script):
-                embed_script = "scripts/embed_and_cluster.py"
-            aa_aln = os.path.join(aln_dir, "foldmason.fasta_aa.fa")
-            for cand in ["mafft.fasta_aa.fa", "foldmason.fasta_aa.fa", "foldmason_aa.fa"]:
-                if os.path.isfile(os.path.join(aln_dir, cand)):
-                    aa_aln = os.path.join(aln_dir, cand)
-                    break
-            embed_src = aa_aln if os.path.isfile(aa_aln) else pdb_dir
+            embed_script = os.path.join(os.path.dirname(__file__), "embeddings.py")
+            aa_aln = resolve_aa_alignment(os.path.join(aln_dir, "foldmason.fasta_3di.fa"))
+            embed_src = aa_aln if (aa_aln and os.path.isfile(aa_aln)) else _qc_dir
             target_py = find_torch_python()
             cmd = [
                 target_py, embed_script,
@@ -789,6 +852,8 @@ def main():
             ]
             sub_env = dict(os.environ)
             sub_env["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+            repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            sub_env["PYTHONPATH"] = repo_root + os.pathsep + sub_env.get("PYTHONPATH", "")
             _embed_error = None
             try:
                 subprocess.run(cmd, check=True, env=sub_env)
@@ -820,8 +885,10 @@ def main():
         multi_summary = None
         if use_similarity:
             _emb_npz = None
-            if getattr(args, "embed", False) and args.embed_model == "esm2":
-                _cand = os.path.join(phy_dir, f"{prefix}_embeddings_esm2.npz")
+            if run_embed:
+                _cand = os.path.join(phy_dir, f"{prefix}_embeddings_{args.embed_model}.npz")
+                if not os.path.isfile(_cand):
+                    _cand = os.path.join(phy_dir, f"{prefix}_embeddings_esm2.npz")
                 _emb_npz = _cand if os.path.isfile(_cand) else None
             multi_summary = partition_structures_by_similarity(
                 _qc_dir, aln_dir,
@@ -835,6 +902,12 @@ def main():
                 min_cluster_size=getattr(args, "cluster_min_size", 10),
                 min_retained=getattr(args, "cluster_min_retained", 0.70),
                 embeddings_npz=_emb_npz,
+                plm_algorithm=getattr(args, "plm_algorithm", "kmeans"),
+                plm_k=getattr(args, "plm_k", None),
+                plm_k_min=getattr(args, "plm_k_min", 2),
+                plm_k_max=getattr(args, "plm_k_max", 30),
+                plm_metric=getattr(args, "embed_metric", "cosine"),
+                embed_model=getattr(args, "embed_model", "esm2"),
                 min_length=getattr(args, "min_seq_length", 50),
                 min_length_frac=getattr(args, "min_length_frac", 0.4),
                 recurse=getattr(args, "cluster_recurse", False),
@@ -1005,6 +1078,7 @@ def main():
                         "--tree-type", args.tree_type,
                         "--guide-trees" if getattr(args, "guide_trees", False) else "--no-guide-trees",
                         "--guide-tree-min-taxa", str(getattr(args, "guide_tree_min_taxa", 80)),
+                        "--guide-tree-method", getattr(args, "guide_tree_method", "fasttree"),
                     ]
                     if args.fast:
                         cmd.append("--fast")
@@ -1167,6 +1241,30 @@ def main():
             duration_s=time.time() - _t_stage, outputs=_html_outputs,
         )
 
+        # Finalise the manifest before packaging the portable report ZIP so that both
+        # the embedded run diagnostics and the archived run_manifest.json reflect the
+        # completed run status.
+        manifest.record_outputs([
+            meta_out_path,
+            os.path.join(out_base, "ca_structures.js"),
+            os.path.join(out_base, "multi_alignment_summary.json"),
+        ] + sorted(glob.glob(os.path.join(phy_dir, "**", "*.treefile"), recursive=True)))
+        _statuses = [st["status"] for st in manifest.data["stages"]]
+        manifest.finish("failed" if "failed" in _statuses
+                        else ("completed_with_skips" if "skipped" in _statuses else "completed"))
+
+        _zip_out = None
+        if getattr(args, "zip", True):
+            try:
+                _zip_out = package_run_report(out_base, zip_path=getattr(args, "zip_path", None))
+                manifest.record_outputs([
+                    os.path.join(out_base, "interactive_tree.html"),
+                    os.path.join(out_base, "alignments_data.js"),
+                    str(_zip_out),
+                ])
+            except Exception as e:
+                print(f"[Pipeline] [!] Notice: Report ZIP packaging encountered: {type(e).__name__}: {e}")
+
         # The banner must agree with the manifest: a dashboard existing does not make a
         # run successful if stages failed or were skipped along the way.
         _failed = [st["name"] for st in manifest.data["stages"] if st["status"] == "failed"]
@@ -1184,16 +1282,12 @@ def main():
             print("[Pipeline] ✅ Full Pipeline Execution & Visualization Complete!")
         if _fresh(global_html):
             print(f"[Pipeline] 🌐 Global Dashboard:    file://{os.path.abspath(global_html)}")
-
-        # Finalise the manifest: the inventory of what this run actually produced
-        manifest.record_outputs([
-            meta_out_path,
-            os.path.join(out_base, "ca_structures.js"),
-            os.path.join(out_base, "multi_alignment_summary.json"),
-        ] + sorted(glob.glob(os.path.join(phy_dir, "**", "*.treefile"), recursive=True)))
-        _statuses = [st["status"] for st in manifest.data["stages"]]
-        manifest.finish("failed" if "failed" in _statuses
-                        else ("completed_with_skips" if "skipped" in _statuses else "completed"))
+        _local_html = os.path.join(out_base, "interactive_tree.html")
+        if os.path.isfile(_local_html):
+            print(f"[Pipeline] 🖥️  Run Dashboard:       file://{os.path.abspath(_local_html)}")
+        if _zip_out and os.path.isfile(_zip_out):
+            _sz_mb = os.path.getsize(_zip_out) / (1024 * 1024)
+            print(f"[Pipeline] 📦 Report ZIP Archive:  {os.path.abspath(_zip_out)} ({_sz_mb:.2f} MB)")
         print(f"[Pipeline] 🧾 Run manifest:          file://{os.path.abspath(manifest.json_path)}")
         print("[Pipeline] ========================================================\n")
 

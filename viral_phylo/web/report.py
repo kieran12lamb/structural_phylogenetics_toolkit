@@ -9,9 +9,11 @@ this CLI report and the in-browser "Load tree file" control.
 
 import html
 import json
+import os
 import re
+import zipfile
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 from viral_phylo import __version__
 from viral_phylo.metadata import parse_metadata
@@ -84,3 +86,153 @@ def build_tree_report(tree_path: str, metadata_path: Optional[str] = None,
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(out_html, encoding="utf-8")
     return out
+
+
+_DEFAULT_SCALE_OPTIONS_BLOCK = (
+    '              <option value="1193" selected>🧬 1,193 Nipah ESMFold Structures</option>\n'
+    '              <option value="500">🌐 500 Viral Glycoproteins</option>\n'
+    '              <option value="100">🧬 100 RNA-dependent RNA Polymerases</option>\n'
+    '              <option value="6">🔬 6 Benchmark Glycoproteins</option>\n'
+)
+
+
+def build_run_dashboard(run_dir: Union[str, Path]) -> Optional[Path]:
+    """Generate a self-contained ``interactive_tree.html`` and ``alignments_data.js`` inside ``run_dir``."""
+    from viral_phylo.web.alignments import write_workflow_alignments_bundle
+    from viral_phylo.web.builder import build_workflow_dataset_entry, tool_version_str
+
+    d = Path(run_dir).resolve()
+    if not d.is_dir():
+        return None
+
+    write_workflow_alignments_bundle(d)
+    entry = build_workflow_dataset_entry(d)
+    if not entry:
+        return None
+
+    key = d.name
+    datasets = {key: entry}
+    datasets_json = json.dumps(datasets).replace("</", "<\\/")
+    option = f'              <option value="{html.escape(key)}" selected>{html.escape(entry["title"])}</option>'
+
+    out_html = assemble_html(datasets_json, tool_version_str, option)
+    out_html = out_html.replace(_DEFAULT_SCALE_OPTIONS_BLOCK, "")
+
+    script_lines = []
+    if (d / "ca_structures.js").is_file():
+        script_lines.append('  <script src="ca_structures.js"></script>')
+    if (d / "alignments_data.js").is_file():
+        script_lines.append('  <script src="alignments_data.js"></script>')
+    out_html = out_html.replace("<!-- DATA_SCRIPTS_PLACEHOLDER -->", "\n".join(script_lines))
+    out_html = out_html.replace('let currentScale = "1193";', f'let currentScale = {json.dumps(key)};')
+
+    out_file = d / "interactive_tree.html"
+    out_file.write_text(out_html, encoding="utf-8")
+    return out_file
+
+
+_ALIGNMENT_SCRATCH_DIRS = {"tmpFolder", "_clustering_work", "_qc_structures", "structures", "_search"}
+_ALIGNMENT_REPORT_EXTS = {".fa", ".fasta", ".faa", ".nw", ".nwk", ".html", ".json", ".tsv", ".csv", ".txt"}
+
+
+def package_run_report(run_dir: Union[str, Path], zip_path: Optional[Union[str, Path]] = None) -> Path:
+    """Package all report data for a completed pipeline run into a portable ``.zip`` archive.
+
+    Produces a self-contained directory inside the archive (``<run_name>_report/``)
+    containing:
+      - ``interactive_tree.html`` (and ``index.html``) with embedded trees, metadata,
+        clustering silhouette & UMAP projections, and run diagnostics
+      - ``ca_structures.js`` (3D C-alpha backbones & confidence tracks)
+      - ``alignments_data.js`` (whole-set and per-cluster 3Di & AA alignments)
+      - ``run_manifest.json``, ``run_manifest.txt``, ``taxa_metadata.json``,
+        ``multi_alignment_summary.json``
+      - ``phylogeny/`` (all whole-set and per-cluster Newick trees, IQ-TREE reports,
+        guide/start trees, PLM embeddings, UMAP coordinates, and silhouette profiles)
+      - ``alignment/`` (all 3Di/AA FASTA alignments, FoldMason guide trees & HTML
+        reports, and cluster summaries, excluding intermediate scratch databases)
+    """
+    d = Path(run_dir).resolve()
+    if not d.is_dir():
+        raise FileNotFoundError(f"Run directory '{run_dir}' does not exist.")
+
+    # Ensure standalone per-run interactive HTML and alignments_data.js are up to date
+    try:
+        build_run_dashboard(d)
+    except Exception as exc:
+        print(f"[Report] [!] Notice: standalone run dashboard generation encountered: {exc}")
+
+    out_zip = Path(zip_path).resolve() if zip_path else (d / f"{d.name}_report.zip")
+    out_zip.parent.mkdir(parents=True, exist_ok=True)
+    arc_root = Path(f"{d.name}_report")
+
+    top_level_files = [
+        "interactive_tree.html",
+        "ca_structures.js",
+        "alignments_data.js",
+        "run_manifest.json",
+        "run_manifest.txt",
+        "taxa_metadata.json",
+        "multi_alignment_summary.json",
+        "search_summary.json",
+    ]
+
+    with zipfile.ZipFile(out_zip, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
+        for fname in top_level_files:
+            fpath = d / fname
+            if fpath.is_file():
+                zf.write(fpath, arcname=str(arc_root / fname))
+                if fname == "interactive_tree.html":
+                    zf.write(fpath, arcname=str(arc_root / "index.html"))
+
+        # Include all phylogeny outputs (master & cluster trees, IQ-TREE logs/reports, embeddings)
+        phy_dir = d / "phylogeny"
+        if phy_dir.is_dir():
+            for root, dirs, files in os.walk(phy_dir):
+                dirs[:] = sorted(dn for dn in dirs if not dn.startswith("."))
+                for fn in sorted(files):
+                    if fn.startswith(".") or fn.endswith(".zip"):
+                        continue
+                    fp = Path(root) / fn
+                    if fp.is_file():
+                        rel = fp.relative_to(d)
+                        zf.write(fp, arcname=str(arc_root / rel))
+
+        # Include alignment FASTA/NW/HTML/JSON reports, skipping FoldMason/Foldseek scratch dirs
+        aln_dir = d / "alignment"
+        if aln_dir.is_dir():
+            for root, dirs, files in os.walk(aln_dir):
+                dirs[:] = sorted(
+                    dn for dn in dirs
+                    if not dn.startswith(".") and dn not in _ALIGNMENT_SCRATCH_DIRS
+                )
+                for fn in sorted(files):
+                    if fn.startswith(".") or fn.startswith("sDB"):
+                        continue
+                    fp = Path(root) / fn
+                    if fp.is_file() and fp.suffix.lower() in _ALIGNMENT_REPORT_EXTS:
+                        rel = fp.relative_to(d)
+                        zf.write(fp, arcname=str(arc_root / rel))
+
+        readme_text = (
+            f"Viral Structural Phylogenetics Toolkit — Run Report Archive ({d.name})\n"
+            f"=====================================================================\n\n"
+            f"Quick Start:\n"
+            f"  1. Extract this .zip archive completely to a local folder.\n"
+            f"  2. Open 'interactive_tree.html' (or 'index.html') in any modern web browser,\n"
+            f"     or serve locally via:\n"
+            f"       python3 -m http.server 8000\n"
+            f"     and visit http://localhost:8000\n\n"
+            f"Contents:\n"
+            f"  - interactive_tree.html        Standalone interactive tree, 3D fold & MSA viewer\n"
+            f"  - ca_structures.js             3D C-alpha backbone coordinates & confidence tracks\n"
+            f"  - alignments_data.js           Whole-set & per-cluster 3Di / AA alignment bundle\n"
+            f"  - taxa_metadata.json           Standardized taxon metadata & color schemas\n"
+            f"  - multi_alignment_summary.json Similarity clustering & partition metrics\n"
+            f"  - run_manifest.json / .txt     Stage-by-stage provenance, warnings & parameters\n"
+            f"  - phylogeny/                   Whole-set & cluster Newick trees, IQ-TREE reports, UMAP\n"
+            f"  - alignment/                   Whole-set & cluster 3Di/AA FASTA alignments & HTML reports\n"
+        )
+        zf.writestr(str(arc_root / "README.txt"), readme_text)
+
+    return out_zip
+

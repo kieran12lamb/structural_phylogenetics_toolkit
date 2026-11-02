@@ -91,6 +91,5 @@ exclude = [
     "__pycache__",
     "build",
     "dist",
-    "results",
-    "scripts/legacy"
+    "results"
 ]

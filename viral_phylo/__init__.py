@@ -36,15 +36,18 @@ from viral_phylo.alignment import (
 from viral_phylo.tree import (
     build_tree,
 )
-from viral_phylo.embeddings import (
-    generate_esm_embeddings,
-    build_hierarchical_tree,
-    compute_silhouette_profile,
-    compute_umap_projection,
-    run_embedding_pipeline,
-    extract_sequences_from_fasta,
-    extract_sequences_from_pdb_dir,
-)
+try:
+    from viral_phylo.embeddings import (
+        generate_esm_embeddings,
+        build_hierarchical_tree,
+        compute_silhouette_profile,
+        compute_umap_projection,
+        run_embedding_pipeline,
+        extract_sequences_from_fasta,
+        extract_sequences_from_pdb_dir,
+    )
+except ImportError:
+    pass
 from viral_phylo.metadata import (
     parse_metadata,
     classify_columns,

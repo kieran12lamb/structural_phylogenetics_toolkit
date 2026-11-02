@@ -20,7 +20,7 @@ import webbrowser
 from pathlib import Path
 
 PORT = 8000
-REPO_DIR = Path(__file__).resolve().parent.parent
+REPO_DIR = Path(__file__).resolve().parent.parent.parent
 
 # Shared pipeline process state
 pipeline_state = {
@@ -85,11 +85,15 @@ class InteractiveBridgeHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
 
-        if parsed.path in ("/", "/index.html"):
+        if parsed.path in ("/", "/index.html", "/interactive_tree.html"):
             if (REPO_DIR / "results/interactive_tree.html").exists():
                 self.path = "/results/interactive_tree.html"
-            else:
-                self.path = "/interactive_tree.html"
+            return super().do_GET()
+
+        # Serve shared results/ bundles transparently when requested from root
+        rel_req = parsed.path.lstrip("/")
+        if rel_req and not (REPO_DIR / rel_req).exists() and (REPO_DIR / "results" / rel_req).exists():
+            self.path = f"/results/{rel_req}"
             return super().do_GET()
 
         if parsed.path == "/api/status":
@@ -154,7 +158,7 @@ class InteractiveBridgeHandler(http.server.SimpleHTTPRequestHandler):
                     return
 
             # Construct command args
-            cmd = [sys.executable, str(REPO_DIR / "scripts/viral_phylogenetics.py"), "pipeline"]
+            cmd = [sys.executable, "-m", "viral_phylo.cli", "pipeline"]
             
             source = payload.get("source", "viro3d")
             if source == "local":

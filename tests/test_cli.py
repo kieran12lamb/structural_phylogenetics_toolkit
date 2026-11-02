@@ -1,6 +1,7 @@
 import unittest
 from pathlib import Path
-from scripts.viral_phylogenetics import build_cli_parser, ensure_matrix_file
+from viral_phylo.cli import build_cli_parser
+from viral_phylo.matrices import ensure_matrix_file
 
 class TestCLI(unittest.TestCase):
     def setUp(self):
@@ -96,18 +97,12 @@ class TestCLI(unittest.TestCase):
 
     def test_find_torch_python_resolution(self):
         import os
-        from scripts.viral_phylogenetics import find_torch_python
-        from scripts.embed_and_cluster import find_torch_python as find_torch_embed
-        
+        from viral_phylo.binaries import find_torch_python
+
         py1 = find_torch_python()
         self.assertIsNotNone(py1)
         self.assertTrue(os.path.isfile(py1))
         self.assertTrue(os.access(py1, os.X_OK))
-
-        py2 = find_torch_embed()
-        self.assertIsNotNone(py2)
-        self.assertTrue(os.path.isfile(py2))
-        self.assertTrue(os.access(py2, os.X_OK))
 
 
     def test_cli_parser_alignment_coverage_and_multi_alignment(self):
@@ -128,6 +123,40 @@ class TestCLI(unittest.TestCase):
         ])
         self.assertEqual(args_pipe.min_coverage, 0.75)
         self.assertTrue(args_pipe.multi_alignment)
+
+    def test_cli_parser_plm_clustering_options(self):
+        """Verify --cluster-mode plm, --plm-algorithm, --plm-k, --plm-k-min, --plm-k-max."""
+        # Auto-k (default when --plm-k omitted)
+        args_auto = self.parser.parse_args([
+            "pipeline", "--input-folder", "structures",
+            "--multi-alignment", "--cluster-mode", "plm",
+        ])
+        self.assertEqual(args_auto.cluster_mode, "plm")
+        self.assertEqual(args_auto.plm_algorithm, "kmeans")
+        self.assertIsNone(args_auto.plm_k)
+        self.assertEqual(args_auto.plm_k_min, 2)
+        self.assertEqual(args_auto.plm_k_max, 30)
+
+        # Explicit k and algorithm
+        args_fixed = self.parser.parse_args([
+            "pipeline", "--input-folder", "structures",
+            "--multi-alignment", "--cluster-mode", "plm",
+            "--plm-algorithm", "ward", "--plm-k", "8",
+            "--plm-k-min", "3", "--plm-k-max", "20",
+        ])
+        self.assertEqual(args_fixed.cluster_mode, "plm")
+        self.assertEqual(args_fixed.plm_algorithm, "ward")
+        self.assertEqual(args_fixed.plm_k, 8)
+        self.assertEqual(args_fixed.plm_k_min, 3)
+        self.assertEqual(args_fixed.plm_k_max, 20)
+
+        # Combined multi-method mode (sequence_plm / both)
+        for m_val in ("sequence_plm", "both", "structural_plm", "all"):
+            args_both = self.parser.parse_args([
+                "pipeline", "--input-folder", "structures",
+                "--multi-alignment", "--cluster-mode", m_val,
+            ])
+            self.assertEqual(args_both.cluster_mode, m_val)
 
 
 if __name__ == "__main__":

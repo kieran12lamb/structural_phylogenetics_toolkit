@@ -76,7 +76,7 @@ class TestAlignment(unittest.TestCase):
 
     def test_compute_alignment_coverage(self):
         """Verify alignment coverage calculation across sequences and columns."""
-        from scripts.viral_phylogenetics import compute_alignment_coverage
+        from viral_phylo.alignment import compute_alignment_coverage
 
         test_aln = {
             "Seq1": "AAAA----",  # 4 non-gaps / 8 = 0.50
@@ -96,7 +96,7 @@ class TestAlignment(unittest.TestCase):
 
     def test_filter_alignment_by_coverage(self):
         """Verify filtering sequences below the coverage threshold."""
-        from scripts.viral_phylogenetics import filter_alignment_by_coverage, write_alignment_fasta
+        from viral_phylo.alignment import filter_alignment_by_coverage, write_alignment_fasta
         import tempfile
 
         test_aln = {

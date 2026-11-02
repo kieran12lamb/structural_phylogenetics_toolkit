@@ -1,0 +1,2238 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SPT Run Configurator — The Structural Phylogenetics Toolkit</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root, [data-theme="dark"] {
+      --bg-main: #0b1120;
+      --panel-bg: rgba(15, 23, 42, 0.94);
+      --card-bg: rgba(30, 41, 59, 0.90);
+      --card-hover: rgba(30, 41, 59, 1);
+      --chip-bg: rgba(51, 65, 85, 0.45);
+      --border-color: #334155;
+      --border-focus: #38bdf8;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --input-bg: #0f172a;
+      --accent: #38bdf8;
+      --accent-soft: rgba(56, 189, 248, 0.14);
+      --modified-border: rgba(56, 189, 248, 0.65);
+      --modified-bg: rgba(56, 189, 248, 0.06);
+      --term-bg: #050811;
+    }
+
+    [data-theme="light"] {
+      --bg-main: #f1f5f9;
+      --panel-bg: rgba(255, 255, 255, 0.95);
+      --card-bg: rgba(255, 255, 255, 0.98);
+      --card-hover: #ffffff;
+      --chip-bg: rgba(226, 232, 240, 0.8);
+      --border-color: #cbd5e1;
+      --border-focus: #0284c7;
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --input-bg: #f8fafc;
+      --accent: #0284c7;
+      --accent-soft: rgba(2, 132, 199, 0.12);
+      --modified-border: rgba(2, 132, 199, 0.65);
+      --modified-bg: rgba(2, 132, 199, 0.05);
+      --term-bg: #0f172a;
+    }
+
+    body {
+      background-color: var(--bg-main);
+      color: var(--text-main);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    /* Toolkit Emblem Styling */
+    .spt-toolkit-handle {
+      background: linear-gradient(180deg, #fbbf24 0%, #b45309 100%);
+      border-color: #78350f;
+    }
+    .spt-toolkit-grip {
+      background: #451a03;
+    }
+    .spt-toolkit-chassis {
+      background: linear-gradient(145deg, #4c0519 0%, #1e1b4b 55%, #0f172a 100%);
+      border: 1.5px solid #b45309;
+      box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.15), 0 4px 10px rgba(0, 0, 0, 0.35);
+    }
+    .spt-toolkit-bracket {
+      border-color: #fbbf24;
+    }
+    .spt-toolkit-rivet {
+      background: radial-gradient(circle, #fde68a 0%, #b45309 100%);
+    }
+    .spt-toolkit-nameplate {
+      color: #fef3c7;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+    }
+    .spt-toolkit-bay-tree {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(251, 191, 36, 0.45);
+    }
+    .spt-toolkit-bay-structure {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(56, 189, 248, 0.45);
+    }
+
+    /* Form Controls */
+    .cfg-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 0.875rem;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .cfg-field {
+      border: 1px solid transparent;
+      border-radius: 0.625rem;
+      padding: 0.625rem 0.75rem;
+      transition: all 0.15s ease;
+    }
+    .cfg-field.is-modified {
+      border-color: var(--modified-border);
+      background: var(--modified-bg);
+    }
+    .cfg-input, .cfg-select {
+      width: 100%;
+      background-color: var(--input-bg);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      border-radius: 0.5rem;
+      padding: 0.45rem 0.65rem;
+      font-size: 0.8125rem;
+      line-height: 1.25rem;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .cfg-input:focus, .cfg-select:focus {
+      outline: none;
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 2px var(--accent-soft);
+    }
+    .cfg-input:disabled, .cfg-select:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .flag-pill {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.7rem;
+      padding: 0.1rem 0.4rem;
+      border-radius: 0.3rem;
+      background: var(--chip-bg);
+      color: var(--accent);
+      border: 1px solid var(--border-color);
+    }
+    .default-pill {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.65rem;
+      color: var(--text-muted);
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(100, 116, 139, 0.35);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(100, 116, 139, 0.55);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-sky-500/30 selection:text-sky-200">
+
+  <!-- TOP HEADER -->
+  <header class="sticky top-0 z-40 h-16 border-b border-[var(--border-color)] bg-[var(--panel-bg)] backdrop-blur-md px-4 sm:px-6 flex items-center justify-between">
+    <div class="flex items-center space-x-3.5 min-w-0">
+      <!-- SPT Emblem -->
+      <div class="flex flex-col items-center shrink-0 group" title="The Structural Phylogenetics Toolkit">
+        <div class="spt-toolkit-handle w-8 h-1.5 rounded-t-[4px] border-t-2 border-x-2 flex items-center justify-center -mb-[1px] z-20">
+          <div class="spt-toolkit-grip w-3.5 h-0.5 rounded-full"></div>
+        </div>
+        <div class="spt-toolkit-chassis h-[38px] w-[74px] rounded-xl flex flex-col justify-between items-center pt-0.5 pb-1 px-1.5 relative overflow-hidden">
+          <div class="spt-toolkit-bracket absolute top-0.5 left-0.5 w-1.5 h-1.5 border-t border-l rounded-tl-[1px] opacity-85"></div>
+          <div class="spt-toolkit-bracket absolute top-0.5 right-0.5 w-1.5 h-1.5 border-t border-r rounded-tr-[1px] opacity-85"></div>
+          <div class="spt-toolkit-bracket absolute bottom-0.5 left-0.5 w-1.5 h-1.5 border-b border-l rounded-bl-[1px] opacity-75"></div>
+          <div class="spt-toolkit-bracket absolute bottom-0.5 right-0.5 w-1.5 h-1.5 border-b border-r rounded-br-[1px] opacity-75"></div>
+          <div class="flex items-center space-x-1.5 z-10 select-none">
+            <span class="spt-toolkit-rivet w-1 h-1 rounded-full"></span>
+            <span class="spt-toolkit-nameplate font-black font-mono text-[9px] tracking-[0.28em] leading-none pl-0.5">SPT</span>
+            <span class="spt-toolkit-rivet w-1 h-1 rounded-full"></span>
+          </div>
+          <div class="flex items-center space-x-1.5 w-full justify-center z-10">
+            <div class="spt-toolkit-bay-tree w-5 h-5 rounded-[6px] flex items-center justify-center p-0.5 shrink-0">
+              <svg class="w-full h-full" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="1.3" fill="#38bdf8"/>
+                <path d="M 12 12 L 15 9 M 15 9 L 19 6 M 15 9 L 20 10 M 12 12 L 15 15 M 15 15 L 19 18 M 15 15 L 19.5 14 M 12 12 L 9 15.5 M 9 15.5 L 11 19.5 M 9 15.5 L 6.5 18 M 12 12 L 8 11.5 M 8 11.5 L 4.5 13.5 M 8 11.5 L 4.5 9.5 M 12 12 L 9.5 8 M 9.5 8 L 7.5 5 M 9.5 8 L 12 4.5" stroke="#94a3b8" stroke-width="1.2" stroke-linecap="round"/>
+                <circle cx="19" cy="6" r="1.1" fill="#38bdf8"/>
+                <circle cx="19" cy="18" r="1.1" fill="#a855f7"/>
+                <circle cx="6.5" cy="18" r="1.1" fill="#f59e0b"/>
+                <circle cx="4.5" cy="9.5" r="1.1" fill="#10b981"/>
+              </svg>
+            </div>
+            <div class="spt-toolkit-bay-structure w-5 h-5 rounded-[6px] flex items-center justify-center shrink-0">
+              <svg class="w-3.5 h-3.5 text-[#38bdf8]" viewBox="0 0 36 36" fill="none">
+                <path d="M 6 28 C 10 32, 14 26, 12 18 C 10 10, 16 6, 22 8 C 28 10, 26 22, 30 24 C 32 25, 34 22, 32 16" stroke="#38bdf8" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                <circle cx="6" cy="28" r="2" fill="#38bdf8"/>
+                <circle cx="22" cy="8" r="2.4" fill="#a855f7"/>
+                <circle cx="30" cy="24" r="2" fill="#34d399"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="min-w-0">
+        <div class="flex items-center space-x-2.5">
+          <h1 class="font-bold text-sm sm:text-base tracking-tight text-[var(--text-main)] truncate">
+            Viral Structural Phylogenetics — Run Configurator
+          </h1>
+          <span class="hidden sm:inline-flex items-center text-[10px] font-mono px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30">
+            viral-phylo CLI
+          </span>
+        </div>
+        <p class="text-[11px] text-[var(--text-muted)] truncate">
+          Configure parameters for any pipeline stage or full workflow and copy the ready-to-run terminal command below.
+        </p>
+      </div>
+    </div>
+
+    <!-- Right Header Controls -->
+    <div class="flex items-center space-x-2 shrink-0">
+      <a href="interactive_tree.html" class="hidden md:inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] hover:border-sky-500/50 text-xs font-medium text-[var(--text-main)] transition">
+        <span>🌳</span>
+        <span>Open Tree Viewer</span>
+      </a>
+      <button type="button" onclick="resetCurrentMode()" class="px-3 py-1.5 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] hover:border-rose-500/50 hover:text-rose-400 text-xs font-medium text-[var(--text-muted)] transition cursor-pointer" title="Reset all parameters to defaults">
+        ↺ Reset Defaults
+      </button>
+      <button type="button" onclick="toggleTheme()" id="themeBtn" class="px-2.5 py-1.5 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] hover:bg-slate-500/15 text-xs font-semibold text-[var(--text-main)] transition cursor-pointer" title="Toggle Dark/Light Theme">
+        🌙 Dark
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT CONTAINER -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 pt-5 pb-72 space-y-5">
+
+    <!-- 1. SUBCOMMAND SELECTOR TABS & QUICK PRESETS -->
+    <section class="cfg-card p-4 space-y-4">
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 border-b border-[var(--border-color)] pb-3.5">
+        <div>
+          <span class="text-[10px] font-mono uppercase tracking-wider text-sky-400 font-semibold">Step 1 · Select CLI Subcommand</span>
+          <h2 class="text-sm font-bold text-[var(--text-main)]">Workflow Mode</h2>
+        </div>
+        <!-- Subcommand Tabs -->
+        <div class="flex flex-wrap gap-1.5" id="subcommandTabs">
+          <button type="button" onclick="setSubcommand('pipeline')" data-cmd="pipeline" class="cmd-tab px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer">
+            🚀 pipeline <span class="text-[10px] opacity-75 font-normal ml-0.5">(End-to-End)</span>
+          </button>
+          <button type="button" onclick="setSubcommand('search')" data-cmd="search" class="cmd-tab px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer">
+            🔎 search <span class="text-[10px] opacity-75 font-normal ml-0.5">(Foldseek Cohort)</span>
+          </button>
+          <button type="button" onclick="setSubcommand('fetch')" data-cmd="fetch" class="cmd-tab px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer">
+            📥 fetch <span class="text-[10px] opacity-75 font-normal ml-0.5">(Viro3D / AFDB)</span>
+          </button>
+          <button type="button" onclick="setSubcommand('align')" data-cmd="align" class="cmd-tab px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer">
+            🧬 align <span class="text-[10px] opacity-75 font-normal ml-0.5">(FoldMason / MAFFT)</span>
+          </button>
+          <button type="button" onclick="setSubcommand('tree')" data-cmd="tree" class="cmd-tab px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer">
+            🌲 tree <span class="text-[10px] opacity-75 font-normal ml-0.5">(IQ-TREE / FastTree)</span>
+          </button>
+          <button type="button" onclick="setSubcommand('embed')" data-cmd="embed" class="cmd-tab px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer">
+            🧠 embed <span class="text-[10px] opacity-75 font-normal ml-0.5">(ESM-2 / ESM-C PLM)</span>
+          </button>
+          <button type="button" onclick="setSubcommand('report')" data-cmd="report" class="cmd-tab px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer">
+            📊 report <span class="text-[10px] opacity-75 font-normal ml-0.5">(HTML Tree Viewer)</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Mode description & Presets -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <p id="subcommandDesc" class="text-xs text-[var(--text-muted)]">
+          Run the complete structural phylogenetics workflow: fetch or load local structures, QC &amp; cluster, align into 3Di + AA, infer ML trees, and optionally compute PLM embeddings.
+        </p>
+
+        <!-- Quick Presets -->
+        <div class="flex items-center flex-wrap gap-1.5 shrink-0">
+          <span class="text-[11px] font-semibold text-[var(--text-muted)] mr-1">Presets:</span>
+          <button type="button" onclick="applyPreset('local_standard')" class="px-2.5 py-1 rounded-md text-[11px] font-medium bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 transition cursor-pointer">
+            📁 Local Folder Run
+          </button>
+          <button type="button" onclick="applyPreset('viro3d_500')" class="px-2.5 py-1 rounded-md text-[11px] font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 transition cursor-pointer">
+            🌐 Viro3D 500 Taxa
+          </button>
+          <button type="button" onclick="applyPreset('large_divergent')" class="px-2.5 py-1 rounded-md text-[11px] font-medium bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 transition cursor-pointer">
+            🧩 Large/Divergent (Cluster + Recurse + PLM)
+          </button>
+          <button type="button" onclick="applyPreset('mmseqs_vs_plm')" class="px-2.5 py-1 rounded-md text-[11px] font-medium bg-fuchsia-500/10 hover:bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 transition cursor-pointer">
+            ⚖️ MMseqs2 vs PLM Comparison
+          </button>
+          <button type="button" onclick="applyPreset('foldmason_guided_clusters')" class="px-2.5 py-1 rounded-md text-[11px] font-medium bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 transition cursor-pointer">
+            🧭 FoldMason-Guided Clusters
+          </button>
+          <button type="button" onclick="applyPreset('fast_overview')" class="px-2.5 py-1 rounded-md text-[11px] font-medium bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 transition cursor-pointer">
+            ⚡ FastTree Overview
+          </button>
+          <button type="button" onclick="applyPreset('search_and_pipe')" class="px-2.5 py-1 rounded-md text-[11px] font-medium bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 transition cursor-pointer">
+            🔎 Search + Pipeline
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- DYNAMIC PARAMETER PANELS                                            -->
+    <!-- =================================================================== -->
+
+    <!-- PANEL: SEARCH (Foldseek Neighbour Cohort Builder) -->
+    <section id="panel-search" class="cfg-card p-5 space-y-4 hidden">
+      <div class="flex items-center justify-between border-b border-[var(--border-color)] pb-3">
+        <div>
+          <span class="text-[10px] font-mono uppercase tracking-wider text-rose-400 font-semibold">Foldseek Cohort Discovery</span>
+          <h3 class="text-sm font-bold text-[var(--text-main)]">Search Parameters (<code class="text-xs font-mono text-sky-400">viral-phylo search</code>)</h3>
+        </div>
+        <label class="inline-flex items-center space-x-2 text-xs font-medium cursor-pointer select-none bg-sky-500/10 border border-sky-500/30 px-3 py-1.5 rounded-lg text-sky-300">
+          <input type="checkbox" id="search_chain_pipeline" onchange="updateUI()" class="rounded border-slate-600 text-sky-500 focus:ring-sky-500">
+          <span>Chain into <code class="font-mono">viral-phylo pipeline</code> after search</span>
+        </label>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Query -->
+        <div class="cfg-field" id="wrap-search_query">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="search_query" class="text-xs font-semibold">Query Protein / Structure <span class="text-rose-400">*</span></label>
+            <span class="flag-pill">-q / --query</span>
+          </div>
+          <input type="text" id="search_query" data-default="" placeholder="e.g. P0DTC2, YP_009724396.1, or path/to/query.pdb" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Structure file (.pdb/.cif), UniProt accession, or NCBI protein accession.</p>
+        </div>
+
+        <!-- Output Dir -->
+        <div class="cfg-field" id="wrap-search_output_dir">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="search_output_dir" class="text-xs font-semibold">Cohort Output Directory</label>
+            <span class="flag-pill">-o / --output-dir</span>
+          </div>
+          <input type="text" id="search_output_dir" data-default="search_cohort" value="search_cohort" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Structures are saved under <code class="font-mono">&lt;output-dir&gt;/structures</code>. <span class="default-pill">(default: search_cohort)</span></p>
+        </div>
+
+        <!-- Databases -->
+        <div class="cfg-field" id="wrap-search_databases">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="search_databases" class="text-xs font-semibold">Foldseek Databases</label>
+            <span class="flag-pill">-d / --database</span>
+          </div>
+          <input type="text" id="search_databases" data-default="bfvd_v3" value="bfvd_v3" placeholder="bfvd_v3,afdb50,pdb100" oninput="updateUI()" class="cfg-input">
+          <div class="flex flex-wrap gap-1 mt-1.5">
+            <button type="button" onclick="toggleDbChip('bfvd_v3')" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-500/15 hover:bg-sky-500/20 border border-[var(--border-color)] cursor-pointer">+bfvd_v3</button>
+            <button type="button" onclick="toggleDbChip('afdb50')" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-500/15 hover:bg-sky-500/20 border border-[var(--border-color)] cursor-pointer">+afdb50</button>
+            <button type="button" onclick="toggleDbChip('afdb-swissprot')" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-500/15 hover:bg-sky-500/20 border border-[var(--border-color)] cursor-pointer">+afdb-swissprot</button>
+            <button type="button" onclick="toggleDbChip('pdb100')" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-500/15 hover:bg-sky-500/20 border border-[var(--border-color)] cursor-pointer">+pdb100</button>
+            <button type="button" onclick="toggleDbChip('cath50')" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-500/15 hover:bg-sky-500/20 border border-[var(--border-color)] cursor-pointer">+cath50</button>
+            <button type="button" onclick="toggleDbChip('mgnify_esm30')" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-500/15 hover:bg-sky-500/20 border border-[var(--border-color)] cursor-pointer">+mgnify_esm30</button>
+          </div>
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Comma-separated list; emits <code class="font-mono">-d</code> for each. <span class="default-pill">(default: bfvd_v3)</span></p>
+        </div>
+
+        <!-- Max Hits -->
+        <div class="cfg-field" id="wrap-search_max_hits">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="search_max_hits" class="text-xs font-semibold">Max Hits (Ceiling)</label>
+            <span class="flag-pill">--max-hits</span>
+          </div>
+          <input type="number" id="search_max_hits" data-default="500" value="500" min="1" step="10" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Upper ceiling on cohort size after quality filtering. <span class="default-pill">(default: 500)</span></p>
+        </div>
+
+        <!-- Max E-value -->
+        <div class="cfg-field" id="wrap-search_max_evalue">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="search_max_evalue" class="text-xs font-semibold">Max E-value Threshold</label>
+            <span class="flag-pill">--max-evalue</span>
+          </div>
+          <input type="text" id="search_max_evalue" data-default="0.001" value="0.001" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Drop hits above this E-value (e.g. <code class="font-mono">1e-3</code> or <code class="font-mono">0.001</code>). <span class="default-pill">(default: 1e-3)</span></p>
+        </div>
+
+        <!-- Min Coverage -->
+        <div class="cfg-field" id="wrap-search_min_coverage">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="search_min_coverage" class="text-xs font-semibold">Min Query Coverage (0–1)</label>
+            <span class="flag-pill">--min-coverage</span>
+          </div>
+          <input type="number" id="search_min_coverage" data-default="0.0" value="0.0" min="0" max="1" step="0.05" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Minimum aligned fraction of the query protein. <span class="default-pill">(default: 0.0)</span></p>
+        </div>
+
+        <!-- Min Alignment Length -->
+        <div class="cfg-field" id="wrap-search_min_aln_length">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="search_min_aln_length" class="text-xs font-semibold">Min Alignment Length (aa)</label>
+            <span class="flag-pill">--min-aln-length</span>
+          </div>
+          <input type="number" id="search_min_aln_length" data-default="0" value="0" min="0" step="10" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Minimum alignment length in residues. <span class="default-pill">(default: 0)</span></p>
+        </div>
+
+        <!-- Workers -->
+        <div class="cfg-field" id="wrap-search_workers">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="search_workers" class="text-xs font-semibold">Download Workers</label>
+            <span class="flag-pill">--workers</span>
+          </div>
+          <input type="number" id="search_workers" data-default="12" value="12" min="1" max="64" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Concurrent structure downloads. <span class="default-pill">(default: 12)</span></p>
+        </div>
+
+        <!-- Search Toggles -->
+        <div class="cfg-field flex flex-col justify-center space-y-2" id="wrap-search_toggles">
+          <label class="inline-flex items-center space-x-2 text-xs cursor-pointer">
+            <input type="checkbox" id="search_exclude_self" data-default="false" onchange="updateUI()" class="rounded border-slate-600 text-sky-500">
+            <span>Exclude self hits (≥99.9% identity) <span class="flag-pill">--exclude-self</span></span>
+          </label>
+          <label class="inline-flex items-center space-x-2 text-xs cursor-pointer">
+            <input type="checkbox" id="search_no_taxonomy" data-default="false" onchange="updateUI()" class="rounded border-slate-600 text-sky-500">
+            <span>Skip UniProt lineage/host lookup <span class="flag-pill">--no-taxonomy</span></span>
+          </label>
+          <label class="inline-flex items-center space-x-2 text-xs cursor-pointer">
+            <input type="checkbox" id="search_no_lddt" data-default="false" onchange="updateUI()" class="rounded border-slate-600 text-sky-500">
+            <span>Skip per-residue LDDT calculation <span class="flag-pill">--no-lddt</span></span>
+          </label>
+          <label class="inline-flex items-center space-x-2 text-xs cursor-pointer">
+            <input type="checkbox" id="search_list_databases" data-default="false" onchange="updateUI()" class="rounded border-slate-600 text-sky-500">
+            <span>List available server databases &amp; exit <span class="flag-pill">--list-databases</span></span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <!-- PANEL: INPUT & DATA SOURCE (pipeline & fetch) -->
+    <section id="panel-input" class="cfg-card p-5 space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[var(--border-color)] pb-3">
+        <div>
+          <span class="text-[10px] font-mono uppercase tracking-wider text-sky-400 font-semibold">Data Ingestion</span>
+          <h3 class="text-sm font-bold text-[var(--text-main)]">Input Structures &amp; Metadata</h3>
+        </div>
+        <!-- Input Source Mode Toggle (only in pipeline mode) -->
+        <div id="inputModeSwitchWrap" class="inline-flex rounded-lg p-0.5 bg-[var(--input-bg)] border border-[var(--border-color)]">
+          <button type="button" id="btnInputOnline" onclick="setInputMode('online')" class="px-3 py-1 rounded-md text-xs font-semibold transition cursor-pointer">
+            🌐 Fetch Online (Viro3D / AFDB)
+          </button>
+          <button type="button" id="btnInputLocal" onclick="setInputMode('local')" class="px-3 py-1 rounded-md text-xs font-semibold transition cursor-pointer">
+            📁 Local Structure Folder
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Local Input Folder (pipeline only) -->
+        <div class="cfg-field" id="wrap-input_folder">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="input_folder" class="text-xs font-semibold">Local Structure Directory</label>
+            <span class="flag-pill">-i / --input-folder</span>
+          </div>
+          <input type="text" id="input_folder" data-default="" placeholder="/path/to/my_structures" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Directory of <code class="font-mono">.pdb</code> / <code class="font-mono">.cif</code> files. Skips online fetch when set.</p>
+        </div>
+
+        <!-- Online Repository Source -->
+        <div class="cfg-field" id="wrap-source">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="source" class="text-xs font-semibold">Online Structure Repository</label>
+            <span class="flag-pill">--source</span>
+          </div>
+          <select id="source" data-default="viro3d" onchange="updateUI()" class="cfg-select">
+            <option value="viro3d">viro3d — Viro3D Viral Structure Database (default)</option>
+            <option value="alphafold">alphafold — AlphaFold Protein Structure Database (AFDB)</option>
+          </select>
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Database to query when fetching structures online. <span class="default-pill">(default: viro3d)</span></p>
+        </div>
+
+        <!-- Qualifier / Search Term -->
+        <div class="cfg-field" id="wrap-qualifier">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="qualifier" class="text-xs font-semibold">Search Qualifier / Protein Name</label>
+            <span class="flag-pill">-q / --qualifier</span>
+          </div>
+          <input type="text" id="qualifier" data-default="glycoprotein" value="glycoprotein" placeholder="glycoprotein, polymerase, capsid..." oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Protein search term for Viro3D or AlphaFold DB. <span class="default-pill">(default: glycoprotein)</span></p>
+        </div>
+
+        <!-- Structure Count -->
+        <div class="cfg-field" id="wrap-count">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="count" class="text-xs font-semibold">Max Structures to Fetch</label>
+            <span class="flag-pill" id="countFlagLabel">-c / --count</span>
+          </div>
+          <input type="number" id="count" data-default="6" value="6" min="1" step="1" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Maximum number of structures to download. <span class="default-pill">(default: 6)</span></p>
+        </div>
+
+        <!-- UniProt IDs -->
+        <div class="cfg-field" id="wrap-uniprot">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="uniprot" class="text-xs font-semibold">UniProt Accession(s) (AFDB)</label>
+            <span class="flag-pill">-u / --uniprot</span>
+          </div>
+          <input type="text" id="uniprot" data-default="" placeholder="e.g. P00520,P04637" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Comma-separated UniProt IDs for AlphaFold DB download.</p>
+        </div>
+
+        <!-- UniProt File -->
+        <div class="cfg-field" id="wrap-uniprot_file">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="uniprot_file" class="text-xs font-semibold">UniProt ID List File (AFDB)</label>
+            <span class="flag-pill">--uniprot-file</span>
+          </div>
+          <input type="text" id="uniprot_file" data-default="" placeholder="path/to/uniprot_ids.txt" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Text file with one UniProt accession per line.</p>
+        </div>
+
+        <!-- File Format (AFDB) -->
+        <div class="cfg-field" id="wrap-format">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="format" class="text-xs font-semibold">AlphaFold Coordinate Format</label>
+            <span class="flag-pill">--format</span>
+          </div>
+          <select id="format" data-default="pdb" onchange="updateUI()" class="cfg-select">
+            <option value="pdb">pdb — Legacy PDB Format (default)</option>
+            <option value="cif">cif — mmCIF Format</option>
+          </select>
+          <div class="mt-2">
+            <label class="inline-flex items-center space-x-2 text-xs cursor-pointer">
+              <input type="checkbox" id="download_pae" data-default="false" onchange="updateUI()" class="rounded border-slate-600 text-sky-500">
+              <span>Download PAE JSON <span class="flag-pill">--download-pae</span></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Metadata Table (pipeline only) -->
+        <div class="cfg-field" id="wrap-metadata">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="metadata" class="text-xs font-semibold">Metadata Table (Optional)</label>
+            <span class="flag-pill">-meta / --metadata</span>
+          </div>
+          <input type="text" id="metadata" data-default="" placeholder="path/to/metadata.csv (.tsv, .xlsx, .json)" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Custom leaf annotations. Inferred automatically if omitted.</p>
+        </div>
+
+        <!-- Output Directory -->
+        <div class="cfg-field" id="wrap-output_dir">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="output_dir" class="text-xs font-semibold">Output Directory</label>
+            <span class="flag-pill">-o / --output-dir</span>
+          </div>
+          <input type="text" id="output_dir" data-default="glycoprotein_workflow" value="glycoprotein_workflow" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Directory for results. Use <code class="font-mono">results/&lt;name&gt;</code> to auto-register in dashboard.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- PANEL: SIMILARITY CLUSTERING & RECURSIVE PARTITIONING (pipeline & align) -->
+    <section id="panel-clustering" class="cfg-card p-5 space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[var(--border-color)] pb-3">
+        <div>
+          <span class="text-[10px] font-mono uppercase tracking-wider text-purple-400 font-semibold">Cohort Partitioning &amp; Quality Control</span>
+          <h3 class="text-sm font-bold text-[var(--text-main)]">Similarity Clustering &amp; Recursive Splitting</h3>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <label class="inline-flex items-center space-x-2 text-xs font-semibold cursor-pointer bg-purple-500/10 border border-purple-500/30 px-3 py-1.5 rounded-lg text-purple-300">
+            <input type="checkbox" id="multi_alignment" data-default="false" onchange="updateUI()" class="rounded border-slate-600 text-purple-500">
+            <span>Enable Multi-Alignment Clustering (<code class="font-mono">--multi-alignment</code>)</span>
+          </label>
+          <label id="wrap-cluster_recurse_toggle" class="inline-flex items-center space-x-2 text-xs font-semibold cursor-pointer bg-sky-500/10 border border-sky-500/30 px-3 py-1.5 rounded-lg text-sky-300">
+            <input type="checkbox" id="cluster_recurse" data-default="false" onchange="updateUI()" class="rounded border-slate-600 text-sky-500">
+            <span>Recursive Cluster Splitting (<code class="font-mono">--cluster-recurse</code>)</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Primary Clustering Grid (pipeline) -->
+      <div id="clusteringPipelineFields" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Cluster Mode -->
+        <div class="cfg-field" id="wrap-cluster_mode">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="cluster_mode" class="text-xs font-semibold">Clustering Engine</label>
+            <span class="flag-pill">--cluster-mode</span>
+          </div>
+          <select id="cluster_mode" data-default="structural" onchange="updateUI()" class="cfg-select">
+            <option value="structural">structural — Foldseek (3Di + AA, default)</option>
+            <option value="sequence">sequence — MMseqs2 (Amino Acid identity)</option>
+            <option value="plm">plm — PLM Embeddings (ESM-2 + K-Means / Silhouette)</option>
+            <option value="coverage">coverage — Legacy greedy coverage partitioner</option>
+          </select>
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">How to partition before aligning. <span class="default-pill">(default: structural)</span></p>
+        </div>
+
+        <!-- Cluster E-value -->
+        <div class="cfg-field" id="wrap-cluster_evalue">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="cluster_evalue" class="text-xs font-semibold">Foldseek Cluster E-value</label>
+            <span class="flag-pill">--cluster-evalue</span>
+          </div>
+          <input type="number" id="cluster_evalue" data-default="1.0" value="1.0" min="0" step="0.1" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Foldseek e-value for structural clustering. <span class="default-pill">(default: 1.0)</span></p>
+        </div>
+
+        <!-- Cluster Coverage -->
+        <div class="cfg-field" id="wrap-cluster_coverage">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="cluster_coverage" class="text-xs font-semibold">Cluster Alignment Coverage</label>
+            <span class="flag-pill">--cluster-coverage</span>
+          </div>
+          <input type="number" id="cluster_coverage" data-default="0.5" value="0.5" min="0.05" max="1.0" step="0.05" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Alignment coverage required to join a cluster. <span class="default-pill">(default: 0.5)</span></p>
+        </div>
+
+        <!-- MMseqs Min Seq ID -->
+        <div class="cfg-field" id="wrap-cluster_min_seq_id">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="cluster_min_seq_id" class="text-xs font-semibold">MMseqs2 Min Seq Identity</label>
+            <span class="flag-pill">--cluster-min-seq-id</span>
+          </div>
+          <input type="number" id="cluster_min_seq_id" data-default="0.5" value="0.5" min="0.05" max="1.0" step="0.05" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Used when <code class="font-mono">--cluster-mode sequence</code>. <span class="default-pill">(default: 0.5)</span></p>
+        </div>
+
+        <!-- TM-score threshold -->
+        <div class="cfg-field" id="wrap-cluster_tmscore">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="cluster_tmscore" class="text-xs font-semibold">TM-align Score (Optional)</label>
+            <span class="flag-pill">--cluster-tmscore</span>
+          </div>
+          <input type="number" id="cluster_tmscore" data-default="" placeholder="Off (uses 3Di+AA)" min="0.1" max="1.0" step="0.05" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Use TM-align at this TM-score instead of 3Di+AA. <span class="default-pill">(default: None)</span></p>
+        </div>
+
+        <!-- PLM Clustering Algorithm -->
+        <div class="cfg-field" id="wrap-plm_algorithm">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="plm_algorithm" class="text-xs font-semibold">PLM Clustering Algorithm</label>
+            <span class="flag-pill">--plm-algorithm</span>
+          </div>
+          <select id="plm_algorithm" data-default="kmeans" onchange="updateUI()" class="cfg-select">
+            <option value="kmeans">kmeans — Spherical K-Means (default)</option>
+            <option value="agglomerative">agglomerative — Average Linkage</option>
+            <option value="ward">ward — Ward Variance Minimising</option>
+            <option value="spectral">spectral — Spectral Clustering</option>
+          </select>
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Used when <code class="font-mono">--cluster-mode plm</code>. <span class="default-pill">(default: kmeans)</span></p>
+        </div>
+
+        <!-- PLM Cluster Count k -->
+        <div class="cfg-field" id="wrap-plm_k">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="plm_k" class="text-xs font-semibold">PLM Clusters (k)</label>
+            <span class="flag-pill">--plm-k</span>
+          </div>
+          <input type="number" id="plm_k" data-default="" placeholder="Auto (optimal silhouette score)" min="2" step="1" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Fixed <code class="font-mono">k</code>, or leave blank to auto-pick optimal silhouette <code class="font-mono">k</code>.</p>
+        </div>
+
+        <!-- PLM k Sweep Range -->
+        <div class="cfg-field" id="wrap-plm_k_range">
+          <div class="flex justify-between items-baseline mb-1">
+            <label class="text-xs font-semibold">PLM Auto-k Sweep Bounds</label>
+            <span class="flag-pill">--plm-k-min / --plm-k-max</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <input type="number" id="plm_k_min" data-default="2" value="2" min="2" step="1" oninput="updateUI()" class="cfg-input" title="Minimum k to test (--plm-k-min)">
+            <input type="number" id="plm_k_max" data-default="30" value="30" min="2" step="1" oninput="updateUI()" class="cfg-input" title="Maximum k to test (--plm-k-max)">
+          </div>
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Candidate <code class="font-mono">k</code> range for silhouette selection. <span class="default-pill">(default: 2..30)</span></p>
+        </div>
+
+        <!-- Cluster Sweep -->
+        <div class="cfg-field" id="wrap-cluster_sweep">
+          <div class="flex justify-between items-baseline mb-1">
+            <label class="text-xs font-semibold">Threshold Sweep</label>
+            <span class="flag-pill">--cluster-sweep</span>
+          </div>
+          <label class="inline-flex items-center space-x-2 text-xs cursor-pointer mt-1.5">
+            <input type="checkbox" id="cluster_sweep" data-default="false" onchange="updateUI()" class="rounded border-slate-600 text-sky-500">
+            <span>Sweep thresholds &amp; pick best silhouette</span>
+          </label>
+          <p class="text-[11px] text-[var(--text-muted)] mt-1.5">Subject to <code class="font-mono">--cluster-min-size</code> &amp; <code class="font-mono">--cluster-min-retained</code>.</p>
+        </div>
+
+        <!-- Cluster Min Size (Sweep) -->
+        <div class="cfg-field" id="wrap-cluster_min_size">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="cluster_min_size" class="text-xs font-semibold">Sweep Usable Cluster Size</label>
+            <span class="flag-pill">--cluster-min-size</span>
+          </div>
+          <input type="number" id="cluster_min_size" data-default="10" value="10" min="2" step="1" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Min cluster size counted as usable in sweep. <span class="default-pill">(default: 10)</span></p>
+        </div>
+
+        <!-- Cluster Min Retained (Sweep) -->
+        <div class="cfg-field" id="wrap-cluster_min_retained">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="cluster_min_retained" class="text-xs font-semibold">Sweep Min Retained Taxa</label>
+            <span class="flag-pill">--cluster-min-retained</span>
+          </div>
+          <input type="number" id="cluster_min_retained" data-default="0.70" value="0.70" min="0.1" max="1.0" step="0.05" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Fraction of taxa sweep must keep in usable clusters. <span class="default-pill">(default: 0.70)</span></p>
+        </div>
+      </div>
+
+      <!-- Pre-Clustering Length QC & Whole-Set Gate + Recursive Splitting Parameters (pipeline) -->
+      <div id="clusteringAdvancedWrap" class="pt-3 border-t border-[var(--border-color)] grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Min Seq Length -->
+        <div class="cfg-field" id="wrap-min_seq_length">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="min_seq_length" class="text-xs font-semibold">Min Sequence Length (aa)</label>
+            <span class="flag-pill">--min-seq-length</span>
+          </div>
+          <input type="number" id="min_seq_length" data-default="50" value="50" min="1" step="5" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Drop short fragments before clustering. <span class="default-pill">(default: 50)</span></p>
+        </div>
+
+        <!-- Min Length Frac -->
+        <div class="cfg-field" id="wrap-min_length_frac">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="min_length_frac" class="text-xs font-semibold">Min Fraction of Median Length</label>
+            <span class="flag-pill">--min-length-frac</span>
+          </div>
+          <input type="number" id="min_length_frac" data-default="0.4" value="0.4" min="0.0" max="1.0" step="0.05" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Drop sequences shorter than this × median length. <span class="default-pill">(default: 0.4)</span></p>
+        </div>
+
+        <!-- Full-Set Max Gap -->
+        <div class="cfg-field" id="wrap-full_set_max_gap">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="full_set_max_gap" class="text-xs font-semibold">Whole-Set Max Gap Fraction</label>
+            <span class="flag-pill">--full-set-max-gap</span>
+          </div>
+          <input type="number" id="full_set_max_gap" data-default="0.50" value="0.50" min="0.05" max="1.0" step="0.05" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Reject whole-set alignment above this gap fraction. <span class="default-pill">(default: 0.50)</span></p>
+        </div>
+
+        <!-- Full-Set Max Expansion -->
+        <div class="cfg-field" id="wrap-full_set_max_expansion">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="full_set_max_expansion" class="text-xs font-semibold">Whole-Set Max Expansion</label>
+            <span class="flag-pill">--full-set-max-expansion</span>
+          </div>
+          <input type="number" id="full_set_max_expansion" data-default="1.5" value="1.5" min="1.0" step="0.1" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Max multiple of median ungapped length for whole-set. <span class="default-pill">(default: 1.5)</span></p>
+        </div>
+
+        <!-- Recurse Max Depth -->
+        <div class="cfg-field" id="wrap-recurse_max_depth">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="recurse_max_depth" class="text-xs font-semibold">Recursion Max Depth</label>
+            <span class="flag-pill">--recurse-max-depth</span>
+          </div>
+          <input type="number" id="recurse_max_depth" data-default="2" value="2" min="1" max="10" step="1" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Max times a gappy cluster may be split. <span class="default-pill">(default: 2)</span></p>
+        </div>
+
+        <!-- Recurse Max Gap -->
+        <div class="cfg-field" id="wrap-recurse_max_gap">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="recurse_max_gap" class="text-xs font-semibold">Recursion Split Max Gap</label>
+            <span class="flag-pill">--recurse-max-gap</span>
+          </div>
+          <input type="number" id="recurse_max_gap" data-default="0.65" value="0.65" min="0.1" max="1.0" step="0.05" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Split cluster if its alignment gap fraction reaches this. <span class="default-pill">(default: 0.65)</span></p>
+        </div>
+
+        <!-- Recurse Max Expansion -->
+        <div class="cfg-field" id="wrap-recurse_max_expansion">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="recurse_max_expansion" class="text-xs font-semibold">Recursion Max Expansion</label>
+            <span class="flag-pill">--recurse-max-expansion</span>
+          </div>
+          <input type="number" id="recurse_max_expansion" data-default="3.0" value="3.0" min="1.0" step="0.25" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Split cluster if alignment exceeds this × median length. <span class="default-pill">(default: 3.0)</span></p>
+        </div>
+
+        <!-- Recurse On & Min Kept -->
+        <div class="cfg-field space-y-2" id="wrap-recurse_on_kept">
+          <div>
+            <div class="flex justify-between items-baseline mb-1">
+              <label for="recurse_on" class="text-xs font-semibold">Split Decision Alphabet</label>
+              <span class="flag-pill">--recurse-on</span>
+            </div>
+            <select id="recurse_on" data-default="3di" onchange="updateUI()" class="cfg-select">
+              <option value="3di">3di — Structural 3Di alignment (default)</option>
+              <option value="both">both — Either 3Di or AA over threshold</option>
+            </select>
+          </div>
+          <div>
+            <div class="flex justify-between items-baseline mb-1">
+              <label for="recurse_min_kept" class="text-xs font-semibold">Min Taxa Kept in 4+ Clusters</label>
+              <span class="flag-pill">--recurse-min-kept</span>
+            </div>
+            <input type="number" id="recurse_min_kept" data-default="0.70" value="0.70" min="0.1" max="1.0" step="0.05" oninput="updateUI()" class="cfg-input">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PANEL: STRUCTURAL MULTIPLE ALIGNMENT (pipeline & align) -->
+    <section id="panel-align" class="cfg-card p-5 space-y-4">
+      <div class="flex items-center justify-between border-b border-[var(--border-color)] pb-3">
+        <div>
+          <span class="text-[10px] font-mono uppercase tracking-wider text-emerald-400 font-semibold">3Di &amp; Amino Acid MSA</span>
+          <h3 class="text-sm font-bold text-[var(--text-main)]">Structural Alignment Parameters</h3>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Align Folder (align subcommand only) -->
+        <div class="cfg-field hidden" id="wrap-align_folder">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="align_folder" class="text-xs font-semibold">Input PDB/CIF Folder</label>
+            <span class="flag-pill">-i / --folder</span>
+          </div>
+          <input type="text" id="align_folder" data-default="viro_3d_structures" value="viro_3d_structures" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Folder containing PDB/CIF files. <span class="default-pill">(default: viro_3d_structures)</span></p>
+        </div>
+
+        <!-- Align Output Dir (align subcommand only) -->
+        <div class="cfg-field hidden" id="wrap-align_output_dir">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="align_output_dir" class="text-xs font-semibold">Alignment Output Directory</label>
+            <span class="flag-pill">-o / --output-dir</span>
+          </div>
+          <input type="text" id="align_output_dir" data-default="foldmason_alignments" value="foldmason_alignments" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Output directory for MSA files. <span class="default-pill">(default: foldmason_alignments)</span></p>
+        </div>
+
+        <!-- Aligner Engine -->
+        <div class="cfg-field" id="wrap-aligner">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="aligner" class="text-xs font-semibold">Multiple Alignment Engine</label>
+            <span class="flag-pill">--aligner</span>
+          </div>
+          <select id="aligner" data-default="foldmason" onchange="updateUI()" class="cfg-select">
+            <option value="foldmason">foldmason — FoldMason 3D MSTA (default)</option>
+            <option value="mafft">mafft — MAFFT with 3Di Substitution Matrix</option>
+          </select>
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">FoldMason aligns 3D coordinates directly; MAFFT aligns extracted 3Di strings.</p>
+        </div>
+
+        <!-- Min Coverage -->
+        <div class="cfg-field" id="wrap-min_coverage">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="min_coverage" class="text-xs font-semibold">Min Sequence Coverage (0–1)</label>
+            <span class="flag-pill">--min-coverage</span>
+          </div>
+          <input type="number" id="min_coverage" data-default="0.70" value="0.70" min="0.0" max="1.0" step="0.05" oninput="updateUI()" class="cfg-input">
+          <div class="mt-2">
+            <label class="inline-flex items-center space-x-2 text-xs cursor-pointer">
+              <input type="checkbox" id="filter_coverage" data-default="false" onchange="updateUI()" class="rounded border-slate-600 text-sky-500">
+              <span>Filter alignment by coverage <span class="flag-pill">--filter-coverage</span></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- MAFFT Matrix -->
+        <div class="cfg-field" id="wrap-mafft_matrix">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="mafft_matrix" class="text-xs font-semibold">MAFFT 3Di Matrix Path</label>
+            <span class="flag-pill">--mafft-matrix</span>
+          </div>
+          <input type="text" id="mafft_matrix" data-default="matrices/mat3di.out" value="matrices/mat3di.out" oninput="updateUI()" class="cfg-input">
+          <div class="mt-2" id="wrap-mafft_leavegappyregion">
+            <label class="inline-flex items-center space-x-2 text-xs cursor-pointer">
+              <input type="checkbox" id="mafft_leavegappyregion" data-default="false" onchange="updateUI()" class="rounded border-slate-600 text-sky-500">
+              <span>Leave gappy regions (AA) <span class="flag-pill">--mafft-leavegappyregion</span></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Binary Overrides (FoldMason / MAFFT) -->
+        <div class="cfg-field" id="wrap-mafft_bin">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="mafft_bin" class="text-xs font-semibold">Custom MAFFT Binary (Optional)</label>
+            <span class="flag-pill">--mafft-bin</span>
+          </div>
+          <input type="text" id="mafft_bin" data-default="" placeholder="Auto-detected from PATH / conda" oninput="updateUI()" class="cfg-input">
+        </div>
+
+        <div class="cfg-field hidden" id="wrap-foldmason_bin">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="foldmason_bin" class="text-xs font-semibold">Custom FoldMason Binary (Optional)</label>
+            <span class="flag-pill">--foldmason-bin</span>
+          </div>
+          <input type="text" id="foldmason_bin" data-default="" placeholder="Auto-detected from PATH / conda" oninput="updateUI()" class="cfg-input">
+        </div>
+      </div>
+    </section>
+
+    <!-- PANEL: PHYLOGENETIC INFERENCE (pipeline & tree) -->
+    <section id="panel-tree" class="cfg-card p-5 space-y-4">
+      <div class="flex items-center justify-between border-b border-[var(--border-color)] pb-3">
+        <div>
+          <span class="text-[10px] font-mono uppercase tracking-wider text-amber-400 font-semibold">Maximum-Likelihood &amp; Approximate-ML</span>
+          <h3 class="text-sm font-bold text-[var(--text-main)]">Phylogenetic Tree Inference</h3>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Alignment file (tree subcommand only) -->
+        <div class="cfg-field hidden" id="wrap-tree_alignment">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="tree_alignment" class="text-xs font-semibold">3Di Alignment File / Folder</label>
+            <span class="flag-pill">-a / --alignment</span>
+          </div>
+          <input type="text" id="tree_alignment" data-default="foldmason_alignments/foldmason.fasta_3di.fa" value="foldmason_alignments/foldmason.fasta_3di.fa" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Path to 3Di FASTA or alignment directory.</p>
+        </div>
+
+        <!-- AA Alignment file (tree subcommand only) -->
+        <div class="cfg-field hidden" id="wrap-tree_alignment_aa">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="tree_alignment_aa" class="text-xs font-semibold">AA Alignment File (Optional)</label>
+            <span class="flag-pill">--alignment-aa</span>
+          </div>
+          <input type="text" id="tree_alignment_aa" data-default="" placeholder="Auto-detected next to 3Di alignment" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Used when <code class="font-mono">--tree-type</code> is <code class="font-mono">aa</code> or <code class="font-mono">both</code>.</p>
+        </div>
+
+        <!-- Tree Type -->
+        <div class="cfg-field" id="wrap-tree_type">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="tree_type" class="text-xs font-semibold">Phylogeny Type</label>
+            <span class="flag-pill">--tree-type</span>
+          </div>
+          <select id="tree_type" data-default="both" onchange="updateUI()" class="cfg-select">
+            <option value="both">both — Dual 3Di Structural + AA Sequence Trees (default)</option>
+            <option value="3di">3di — 3Di Structural Phylogeny Only</option>
+            <option value="aa">aa — Primary Amino Acid Phylogeny Only</option>
+            <option value="tanglegram">tanglegram — Alias for 'both' (Cophylogenetic Tanglegram)</option>
+          </select>
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Inferring <code class="font-mono">both</code> enables the interactive 3Di vs AA tanglegram.</p>
+        </div>
+
+        <!-- Per-Cluster / Main Tree Method -->
+        <div class="cfg-field" id="wrap-method">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="method" class="text-xs font-semibold">Tree Inference Method (Cluster / Main)</label>
+            <span class="flag-pill">-m / --method</span>
+          </div>
+          <select id="method" data-default="iqtree" onchange="updateUI()" class="cfg-select">
+            <option value="iqtree">iqtree — IQ-TREE Maximum Likelihood (default)</option>
+            <option value="fasttree">fasttree — VeryFastTree / FastTree (Approximate-ML via -trans)</option>
+            <option value="foldmason">foldmason — Extract FoldMason Progressive Guide Tree</option>
+          </select>
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Used for per-cluster trees (and main tree if not overridden by <code class="font-mono">--master-method</code>).</p>
+        </div>
+
+        <!-- Whole-Set Master Tree Method (pipeline only) -->
+        <div class="cfg-field" id="wrap-master_method">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="master_method" class="text-xs font-semibold">Whole-Set Master Tree Method</label>
+            <span class="flag-pill">--master-method</span>
+          </div>
+          <select id="master_method" data-default="auto" onchange="updateUI()" class="cfg-select">
+            <option value="auto">auto — IQ-TREE if alignment passes gate, else FastTree (default)</option>
+            <option value="fasttree">fasttree — Always use VeryFastTree/FastTree (~1 min for 1,000+ taxa)</option>
+            <option value="iqtree">iqtree — Always run full IQ-TREE on whole set</option>
+            <option value="foldmason">foldmason — FoldMason guide tree</option>
+          </select>
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Avoids multi-day IQ-TREE runs on gap-rich whole-set overview alignments.</p>
+        </div>
+
+        <!-- 3Di Substitution Matrix -->
+        <div class="cfg-field" id="wrap-matrix">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="matrix" class="text-xs font-semibold">3Di Substitution Matrix</label>
+            <span class="flag-pill">--matrix</span>
+          </div>
+          <select id="matrix" data-default="both" onchange="updateUI()" class="cfg-select">
+            <option value="both">both — Test Q.3Di.AF &amp; Q.3Di.LLM via ModelFinder (default)</option>
+            <option value="alphafold">alphafold (af) — AlphaFold Empirical Matrix (Q.3Di.AF)</option>
+            <option value="esmfold">esmfold (llm) — ESMFold/ProstT5 Matrix (Q.3Di.LLM)</option>
+            <option value="auto">auto — Automatic selection</option>
+          </select>
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Empirical 3Di substitution matrices (Hochberg et al.). <span class="default-pill">(default: both)</span></p>
+        </div>
+
+        <!-- Rate Heterogeneity -->
+        <div class="cfg-field" id="wrap-rate_heterogeneity">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="rate_heterogeneity" class="text-xs font-semibold">Rate Heterogeneity Across Sites</label>
+            <span class="flag-pill">--rate-heterogeneity</span>
+          </div>
+          <select id="rate_heterogeneity" data-default="auto" onchange="updateUI()" class="cfg-select">
+            <option value="auto">auto — ModelFinder tests Uniform, +I, +G4, +I+G4, +R (default)</option>
+            <option value="+G4">+G4 — 4-Category Discrete Gamma</option>
+            <option value="+I+G4">+I+G4 — Invariable Sites + 4-Category Gamma</option>
+            <option value="+R">+R — FreeRate Model</option>
+            <option value="+I">+I — Invariable Sites Only</option>
+            <option value="Uniform">Uniform — Equal rates across sites</option>
+          </select>
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">For ≥80 sequences, IQ-TREE uses fixed <code class="font-mono">+G4</code> to skip slow model selection.</p>
+        </div>
+
+        <!-- Criterion (tree subcommand only) -->
+        <div class="cfg-field hidden" id="wrap-criterion">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="criterion" class="text-xs font-semibold">Model Selection Criterion</label>
+            <span class="flag-pill">--criterion</span>
+          </div>
+          <select id="criterion" data-default="BIC" onchange="updateUI()" class="cfg-select">
+            <option value="BIC">BIC — Bayesian Information Criterion (default)</option>
+            <option value="AIC">AIC — Akaike Information Criterion</option>
+            <option value="AICc">AICc — Corrected Akaike Information Criterion</option>
+          </select>
+        </div>
+
+        <!-- Ultrafast Bootstrap Replicates -->
+        <div class="cfg-field" id="wrap-bootstrap">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="bootstrap" class="text-xs font-semibold">UFBoot Replicates</label>
+            <span class="flag-pill">-b / --bootstrap</span>
+          </div>
+          <input type="number" id="bootstrap" data-default="1000" value="1000" min="0" step="100" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Must be <code class="font-mono">≥1000</code> or <code class="font-mono">0</code> (disabled). <span class="default-pill">(default: 1000)</span></p>
+        </div>
+
+        <!-- SH-aLRT Replicates -->
+        <div class="cfg-field" id="wrap-alrt">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="alrt" class="text-xs font-semibold">SH-aLRT Replicates</label>
+            <span class="flag-pill">--alrt</span>
+          </div>
+          <input type="number" id="alrt" data-default="1000" value="1000" min="0" step="100" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Must be <code class="font-mono">≥1000</code> or <code class="font-mono">0</code> (disabled). <span class="default-pill">(default: 1000)</span></p>
+        </div>
+
+        <!-- Guide Trees & Fast Mode -->
+        <div class="cfg-field space-y-2" id="wrap-guide_trees">
+          <div class="flex justify-between items-baseline">
+            <span class="text-xs font-semibold">Starting Trees &amp; Fast Search</span>
+            <span class="flag-pill">--guide-trees / --fast</span>
+          </div>
+          <label class="inline-flex items-center space-x-2 text-xs cursor-pointer">
+            <input type="checkbox" id="guide_trees" data-default="true" checked onchange="updateUI()" class="rounded border-slate-600 text-sky-500">
+            <span>Seed IQ-TREE with a validated starting/guide tree</span>
+          </label>
+          <label class="inline-flex items-center space-x-2 text-xs cursor-pointer block">
+            <input type="checkbox" id="fast" data-default="false" onchange="updateUI()" class="rounded border-slate-600 text-sky-500">
+            <span>Enable IQ-TREE fast search mode (<code class="font-mono">--fast</code>)</span>
+          </label>
+        </div>
+
+        <!-- Guide Tree Method (FastTree vs FoldMason) -->
+        <div class="cfg-field" id="wrap-guide_tree_method">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="guide_tree_method" class="text-xs font-semibold">Cluster Starting/Guide Tree Source</label>
+            <span class="flag-pill">--guide-tree-method</span>
+          </div>
+          <select id="guide_tree_method" data-default="fasttree" onchange="onGuideTreeMethodChange()" class="cfg-select">
+            <option value="fasttree">fasttree — VeryFastTree / FastTree starting tree (default)</option>
+            <option value="foldmason">foldmason — FoldMason cluster guide tree (foldmason.fasta.nw)</option>
+          </select>
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Repaired to strictly bifurcating &amp; validated before seeding IQ-TREE (<code class="font-mono">-t</code>).</p>
+        </div>
+
+        <!-- Guide Tree Min Taxa -->
+        <div class="cfg-field" id="wrap-guide_tree_min_taxa">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="guide_tree_min_taxa" class="text-xs font-semibold">Starting Tree Min Taxa</label>
+            <span class="flag-pill">--guide-tree-min-taxa</span>
+          </div>
+          <input type="number" id="guide_tree_min_taxa" data-default="80" value="80" min="4" step="1" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Smallest alignment given a starting tree (set to <code class="font-mono">4</code> to guide every cluster). <span class="default-pill">(default: 80)</span></p>
+        </div>
+
+        <!-- Tree Output Dir, Prefix, IQ-TREE Bin (tree subcommand only) -->
+        <div class="cfg-field hidden" id="wrap-tree_output_dir">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="tree_output_dir" class="text-xs font-semibold">Tree Output Directory</label>
+            <span class="flag-pill">-o / --output-dir</span>
+          </div>
+          <input type="text" id="tree_output_dir" data-default="phylogeny_results" value="phylogeny_results" oninput="updateUI()" class="cfg-input">
+        </div>
+
+        <div class="cfg-field hidden" id="wrap-tree_prefix">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="tree_prefix" class="text-xs font-semibold">Output Filename Prefix</label>
+            <span class="flag-pill">-p / --prefix</span>
+          </div>
+          <input type="text" id="tree_prefix" data-default="viral_tree" value="viral_tree" oninput="updateUI()" class="cfg-input">
+        </div>
+
+        <div class="cfg-field hidden" id="wrap-iqtree_bin">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="iqtree_bin" class="text-xs font-semibold">Custom IQ-TREE Binary (Optional)</label>
+            <span class="flag-pill">--iqtree-bin</span>
+          </div>
+          <input type="text" id="iqtree_bin" data-default="" placeholder="Auto-detected from PATH / conda" oninput="updateUI()" class="cfg-input">
+        </div>
+      </div>
+    </section>
+
+    <!-- PANEL: PROTEIN LANGUAGE MODEL (PLM) EMBEDDINGS (pipeline & embed) -->
+    <section id="panel-embed" class="cfg-card p-5 space-y-4">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[var(--border-color)] pb-3">
+        <div>
+          <span class="text-[10px] font-mono uppercase tracking-wider text-emerald-400 font-semibold">Semantic Sequence Space (ESM-2 / ESM-C)</span>
+          <h3 class="text-sm font-bold text-[var(--text-main)]">PLM Embeddings, Hierarchical Tree, Silhouette &amp; 2D UMAP</h3>
+        </div>
+        <label id="wrap-embed_toggle" class="inline-flex items-center space-x-2 text-xs font-semibold cursor-pointer bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-lg text-emerald-300">
+          <input type="checkbox" id="embed" data-default="false" onchange="updateUI()" class="rounded border-slate-600 text-emerald-500">
+          <span>Enable PLM Embeddings Stage (<code class="font-mono">--embed</code>)</span>
+        </label>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Embed Input (embed subcommand only) -->
+        <div class="cfg-field hidden" id="wrap-embed_input">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="embed_input" class="text-xs font-semibold">Input FASTA or PDB Directory <span class="text-rose-400">*</span></label>
+            <span class="flag-pill">-i / --input</span>
+          </div>
+          <input type="text" id="embed_input" data-default="foldmason_alignments/foldmason.fasta_aa.fa" value="foldmason_alignments/foldmason.fasta_aa.fa" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Path to amino acid FASTA file or folder of PDB structures.</p>
+        </div>
+
+        <!-- PLM Model -->
+        <div class="cfg-field" id="wrap-embed_model">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="embed_model" class="text-xs font-semibold">Protein Language Model</label>
+            <span class="flag-pill" id="embedModelFlag">--embed-model</span>
+          </div>
+          <select id="embed_model" data-default="esm2" onchange="updateUI()" class="cfg-select">
+            <option value="esm2">esm2 — Meta ESM-2 650M (facebook/esm2_t33_650M_UR50D, default)</option>
+            <option value="esmc">esmc — EvolutionaryScale ESM-C 600M (biohub/ESMC-600M)</option>
+          </select>
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Mean-pooled residue representations extracted on GPU/CPU.</p>
+        </div>
+
+        <!-- Hierarchical Clustering Algorithm -->
+        <div class="cfg-field" id="wrap-embed_clustering">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="embed_clustering" class="text-xs font-semibold">Clustering Method</label>
+            <span class="flag-pill" id="embedClusteringFlag">--embed-clustering</span>
+          </div>
+          <select id="embed_clustering" data-default="upgma" onchange="updateUI()" class="cfg-select">
+            <option value="upgma">upgma — UPGMA Average Linkage (default, computes silhouette)</option>
+            <option value="average">average — Average Linkage</option>
+            <option value="complete">complete — Complete (Maximum) Linkage</option>
+            <option value="ward">ward — Ward Variance Minimization</option>
+            <option value="single">single — Single (Minimum) Linkage</option>
+            <option value="nj">nj — Neighbor-Joining (Note: no linkage matrix / silhouette)</option>
+          </select>
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Use <code class="font-mono">upgma</code>/<code class="font-mono">average</code>/<code class="font-mono">complete</code>/<code class="font-mono">ward</code> for silhouette profiles.</p>
+        </div>
+
+        <!-- Pairwise Distance Metric -->
+        <div class="cfg-field" id="wrap-embed_metric">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="embed_metric" class="text-xs font-semibold">Pairwise Distance Metric</label>
+            <span class="flag-pill" id="embedMetricFlag">--embed-metric</span>
+          </div>
+          <select id="embed_metric" data-default="cosine" onchange="updateUI()" class="cfg-select">
+            <option value="cosine">cosine — Cosine Distance (default)</option>
+            <option value="euclidean">euclidean — Euclidean (L2) Distance</option>
+            <option value="l1">l1 — Manhattan / Cityblock (L1) Distance</option>
+            <option value="cityblock">cityblock — Cityblock Distance</option>
+            <option value="manhattan">manhattan — Manhattan Distance</option>
+          </select>
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Used for both the hierarchical tree and 2D UMAP projection.</p>
+        </div>
+
+        <!-- Embed Subcommand Specifics: Output Dir, Prefix, Batch Size, Max Length -->
+        <div class="cfg-field hidden" id="wrap-embed_output_dir">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="embed_output_dir" class="text-xs font-semibold">Output Directory</label>
+            <span class="flag-pill">-o / --output-dir</span>
+          </div>
+          <input type="text" id="embed_output_dir" data-default="plm_results" value="plm_results" oninput="updateUI()" class="cfg-input">
+        </div>
+
+        <div class="cfg-field hidden" id="wrap-embed_prefix">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="embed_prefix" class="text-xs font-semibold">Output File Prefix</label>
+            <span class="flag-pill">-p / --prefix</span>
+          </div>
+          <input type="text" id="embed_prefix" data-default="viral_plm" value="viral_plm" oninput="updateUI()" class="cfg-input">
+        </div>
+
+        <div class="cfg-field hidden" id="wrap-embed_batch_size">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="embed_batch_size" class="text-xs font-semibold">Inference Batch Size</label>
+            <span class="flag-pill">--batch-size</span>
+          </div>
+          <input type="number" id="embed_batch_size" data-default="1" value="1" min="1" step="1" oninput="updateUI()" class="cfg-input">
+        </div>
+
+        <div class="cfg-field hidden" id="wrap-embed_max_length">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="embed_max_length" class="text-xs font-semibold">Max Sequence Length (Truncation)</label>
+            <span class="flag-pill">--max-length</span>
+          </div>
+          <input type="number" id="embed_max_length" data-default="1024" value="1024" min="64" step="64" oninput="updateUI()" class="cfg-input">
+        </div>
+      </div>
+    </section>
+
+    <!-- PANEL: REPORT GENERATOR (report subcommand only) -->
+    <section id="panel-report" class="cfg-card p-5 space-y-4 hidden">
+      <div class="flex items-center justify-between border-b border-[var(--border-color)] pb-3">
+        <div>
+          <span class="text-[10px] font-mono uppercase tracking-wider text-sky-400 font-semibold">Standalone HTML Tree Report</span>
+          <h3 class="text-sm font-bold text-[var(--text-main)]">Report Parameters (<code class="text-xs font-mono text-sky-400">viral-phylo report</code>)</h3>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="cfg-field" id="wrap-report_tree">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="report_tree" class="text-xs font-semibold">Input Tree File</label>
+            <span class="flag-pill">-t / --tree</span>
+          </div>
+          <input type="text" id="report_tree" data-default="" placeholder="path/to/tree.treefile (.nwk, .tre, .nex)" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Tree file in Newick or NEXUS format (leave blank if packaging <code class="font-mono">--run-dir</code>).</p>
+        </div>
+
+        <div class="cfg-field" id="wrap-report_run_dir">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="report_run_dir" class="text-xs font-semibold">Or Package Completed Run Directory (.zip)</label>
+            <span class="flag-pill">-r / --run-dir</span>
+          </div>
+          <input type="text" id="report_run_dir" data-default="" placeholder="results/my_workflow (packages full report .zip)" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Bundle a finished server run directory into a self-contained <code class="font-mono">.zip</code> archive.</p>
+        </div>
+
+        <div class="cfg-field" id="wrap-report_metadata">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="report_metadata" class="text-xs font-semibold">Metadata Table (Optional)</label>
+            <span class="flag-pill">-meta / --metadata</span>
+          </div>
+          <input type="text" id="report_metadata" data-default="" placeholder="path/to/metadata.csv (.tsv, .xlsx, .json)" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Optional table with one row per leaf.</p>
+        </div>
+
+        <div class="cfg-field" id="wrap-report_output">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="report_output" class="text-xs font-semibold">Output HTML Path (Optional)</label>
+            <span class="flag-pill">-o / --output</span>
+          </div>
+          <input type="text" id="report_output" data-default="" placeholder="Defaults to <tree>_report.html" oninput="updateUI()" class="cfg-input">
+        </div>
+
+        <div class="cfg-field" id="wrap-report_title">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="report_title" class="text-xs font-semibold">Custom Report Title (Optional)</label>
+            <span class="flag-pill">--title</span>
+          </div>
+          <input type="text" id="report_title" data-default="" placeholder="Defaults to tree filename" oninput="updateUI()" class="cfg-input">
+        </div>
+      </div>
+    </section>
+
+    <!-- PANEL: COMPUTE, THREADING & EXECUTION WRAPPERS -->
+    <section id="panel-compute" class="cfg-card p-5 space-y-4">
+      <div class="flex items-center justify-between border-b border-[var(--border-color)] pb-3">
+        <div>
+          <span class="text-[10px] font-mono uppercase tracking-wider text-sky-400 font-semibold">Hardware Resources &amp; Shell Formatting</span>
+          <h3 class="text-sm font-bold text-[var(--text-main)]">Compute Threads &amp; Terminal Output Options</h3>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="computeThreadsGrid">
+        <!-- Total Threads -->
+        <div class="cfg-field" id="wrap-threads">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="threads" class="text-xs font-semibold">Max CPU Threads Cap</label>
+            <span class="flag-pill">-t / --threads</span>
+          </div>
+          <input type="text" id="threads" data-default="8" value="8" placeholder="8, 16, 32, or AUTO" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Caps every tool &amp; BLAS pool. Avoid <code class="font-mono">AUTO</code> on many-core nodes. <span class="default-pill">(default: 8)</span></p>
+        </div>
+
+        <!-- Per-Cluster Tree Threads (pipeline only) -->
+        <div class="cfg-field" id="wrap-tree_threads">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="tree_threads" class="text-xs font-semibold">Threads per Cluster Tree Job</label>
+            <span class="flag-pill">--tree-threads</span>
+          </div>
+          <input type="text" id="tree_threads" data-default="8" value="8" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">IQ-TREE scales best around ~8 threads on short cluster alignments. <span class="default-pill">(default: 8)</span></p>
+        </div>
+
+        <!-- Concurrent Cluster Tree Jobs (pipeline only) -->
+        <div class="cfg-field" id="wrap-tree_jobs">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="tree_jobs" class="text-xs font-semibold">Parallel Cluster Tree Jobs</label>
+            <span class="flag-pill">--tree-jobs</span>
+          </div>
+          <input type="number" id="tree_jobs" data-default="" placeholder="Auto (threads / tree-threads)" min="1" step="1" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1" id="parallelJobsHint">Auto-calculated: 1 cluster tree at a time (8 / 8).</p>
+        </div>
+
+        <!-- Portable Report ZIP Archive (pipeline only) -->
+        <div class="cfg-field space-y-1.5" id="wrap-zip">
+          <div class="flex justify-between items-baseline">
+            <label for="zip" class="text-xs font-semibold">Portable Report ZIP Archive</label>
+            <span class="flag-pill">--zip / --no-zip</span>
+          </div>
+          <label class="inline-flex items-center space-x-2 text-xs cursor-pointer mt-1">
+            <input type="checkbox" id="zip" data-default="true" checked onchange="updateUI()" class="rounded border-slate-600 text-sky-500">
+            <span>Generate <code class="font-mono">&lt;run&gt;_report.zip</code> with HTML viewer, 3D folds, alignments &amp; trees</span>
+          </label>
+          <p class="text-[11px] text-[var(--text-muted)]">Self-contained bundle ready to <code class="font-mono">scp</code> / download from a server. <span class="default-pill">(default: on)</span></p>
+        </div>
+
+        <!-- Custom ZIP Output Path (pipeline only) -->
+        <div class="cfg-field md:col-span-2" id="wrap-zip_path">
+          <div class="flex justify-between items-baseline mb-1">
+            <label for="zip_path" class="text-xs font-semibold">Custom Report ZIP Path (Optional)</label>
+            <span class="flag-pill">--zip-path</span>
+          </div>
+          <input type="text" id="zip_path" data-default="" placeholder="Defaults to <output-dir>/<run_name>_report.zip" oninput="updateUI()" class="cfg-input">
+          <p class="text-[11px] text-[var(--text-muted)] mt-1">Override destination path for the portable <code class="font-mono">.zip</code> report bundle.</p>
+        </div>
+      </div>
+
+      <!-- Shell Formatting & Post-Run Chaining -->
+      <div class="pt-3 border-t border-[var(--border-color)] flex flex-wrap items-center justify-between gap-4">
+        <div class="flex flex-wrap items-center gap-4">
+          <label class="inline-flex items-center space-x-2 text-xs cursor-pointer">
+            <input type="checkbox" id="opt_include_defaults" onchange="updateUI()" class="rounded border-slate-600 text-sky-500">
+            <span>Include default flags explicitly (verbose command)</span>
+          </label>
+          <label class="inline-flex items-center space-x-2 text-xs cursor-pointer">
+            <input type="checkbox" id="opt_multiline" checked onchange="updateUI()" class="rounded border-slate-600 text-sky-500">
+            <span>Multi-line format (<code class="font-mono">\</code> line continuations)</span>
+          </label>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-4">
+          <label class="inline-flex items-center space-x-2 text-xs cursor-pointer">
+            <input type="checkbox" id="opt_conda_activate" onchange="updateUI()" class="rounded border-slate-600 text-emerald-500">
+            <span>Prepend <code class="font-mono text-emerald-400">conda activate spt &amp;&amp;</code></span>
+          </label>
+          <label class="inline-flex items-center space-x-2 text-xs cursor-pointer">
+            <input type="checkbox" id="opt_rebuild_dashboard" onchange="updateUI()" class="rounded border-slate-600 text-purple-500">
+            <span>Append <code class="font-mono text-purple-400">&amp;&amp; build-alignments &amp;&amp; build-tree-view</code></span>
+          </label>
+          <label class="inline-flex items-center space-x-2 text-xs cursor-pointer">
+            <input type="checkbox" id="opt_nohup" onchange="updateUI()" class="rounded border-slate-600 text-amber-500">
+            <span>Wrap in background <code class="font-mono text-amber-400">nohup ... &gt; run.log 2&gt;&amp;1 &amp;</code></span>
+          </label>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- STICKY BOTTOM TERMINAL COMMAND DOCK -->
+  <footer class="fixed bottom-0 inset-x-0 z-50 border-t border-[var(--border-color)] bg-[var(--panel-bg)] backdrop-blur-xl shadow-2xl">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 space-y-2.5">
+      <!-- Validation / Advisories Bar -->
+      <div id="validationBar" class="hidden flex-wrap gap-2 text-xs"></div>
+
+      <!-- Command Header & Action Buttons -->
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center space-x-2.5">
+          <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+            bash
+          </span>
+          <span class="text-xs font-semibold text-[var(--text-main)]">Generated Terminal Command</span>
+          <span id="modifiedCountBadge" class="text-[11px] font-mono text-sky-400"></span>
+        </div>
+
+        <div class="flex items-center space-x-2">
+          <button type="button" onclick="downloadShellScript()" class="px-3 py-1.5 rounded-lg border border-[var(--border-color)] bg-[var(--card-bg)] hover:border-sky-500/50 text-xs font-medium text-[var(--text-main)] transition cursor-pointer">
+            ⬇ Download <code class="font-mono">.sh</code>
+          </button>
+          <button type="button" id="copyBtn" onclick="copyCommand()" class="px-4 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs shadow-lg shadow-sky-500/20 transition cursor-pointer flex items-center space-x-1.5">
+            <span id="copyBtnIcon">📋</span>
+            <span id="copyBtnText">Copy Command</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Command Code Box -->
+      <div class="relative rounded-xl bg-[var(--term-bg)] border border-slate-700/80 p-3.5 overflow-x-auto max-h-44">
+        <pre id="commandOutput" class="font-mono text-xs sm:text-[13px] leading-relaxed text-slate-100 select-all whitespace-pre-wrap break-all"></pre>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    let currentSubcommand = 'pipeline';
+    let currentInputMode = 'online'; // 'online' or 'local'
+
+    const SUBCOMMAND_DESCRIPTIONS = {
+      pipeline: "Run the complete structural phylogenetics workflow: fetch or load local structures, QC & cluster, align into 3Di + AA, infer ML trees, and optionally compute PLM embeddings.",
+      search: "Query the hosted Foldseek server with a protein structure or UniProt/NCBI accession, filter hits by quality, and materialise a local structure cohort ready for the pipeline.",
+      fetch: "Download viral PDB/mmCIF coordinate structures directly from the Viro3D database or AlphaFold Protein Structure Database (AFDB).",
+      align: "Align a directory of 3D protein structures using FoldMason (or MAFFT with a 3Di matrix) into 3Di structural and amino acid FASTA alignments.",
+      tree: "Infer structural (3Di), sequence (AA), or dual cophylogenetic tanglegram trees using IQ-TREE (with Q.3Di.AF / Q.3Di.LLM matrices), VeryFastTree, or FoldMason.",
+      embed: "Extract mean-pooled residue embeddings using ESM-2 (650M) or ESM-C (600M), build hierarchical clustering trees, and compute silhouette clade profiles & 2D UMAP coordinates.",
+      report: "Compile an existing Newick or NEXUS tree file (plus optional metadata table) into a standalone interactive HTML report."
+    };
+
+    function shellQuote(val) {
+      const s = String(val);
+      if (s === '') return "''";
+      if (/^[a-zA-Z0-9_./:=+,-]+$/.test(s)) return s;
+      return "'" + s.replace(/'/g, "'\\''") + "'";
+    }
+
+    function toggleTheme() {
+      const html = document.documentElement;
+      const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      html.setAttribute('data-theme', next);
+      const btn = document.getElementById('themeBtn');
+      btn.textContent = next === 'dark' ? '🌙 Dark' : '☀️ Light';
+      try { localStorage.setItem('spt_config_theme', next); } catch (e) {}
+    }
+
+    function setSubcommand(cmd) {
+      currentSubcommand = cmd;
+      document.querySelectorAll('.cmd-tab').forEach(btn => {
+        const active = btn.getAttribute('data-cmd') === cmd;
+        btn.className = active
+          ? 'cmd-tab px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer bg-sky-500 text-slate-950 shadow-sm'
+          : 'cmd-tab px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer bg-[var(--input-bg)] text-[var(--text-muted)] hover:text-[var(--text-main)] border border-[var(--border-color)]';
+      });
+      document.getElementById('subcommandDesc').textContent = SUBCOMMAND_DESCRIPTIONS[cmd] || '';
+
+      // Default output_dir adjustments when switching between fetch and pipeline if untouched
+      const outEl = document.getElementById('output_dir');
+      if (cmd === 'fetch') {
+        if (outEl.value === 'glycoprotein_workflow') outEl.value = 'viro_3d_structures';
+        outEl.setAttribute('data-default', 'viro_3d_structures');
+        document.getElementById('countFlagLabel').textContent = '-m / --max-sequences';
+      } else if (cmd === 'pipeline') {
+        if (outEl.value === 'viro_3d_structures') outEl.value = 'glycoprotein_workflow';
+        outEl.setAttribute('data-default', 'glycoprotein_workflow');
+        document.getElementById('countFlagLabel').textContent = '-c / --count';
+      }
+
+      updatePanelVisibility();
+      updateUI();
+    }
+
+    function setInputMode(mode) {
+      currentInputMode = mode;
+      const btnOnline = document.getElementById('btnInputOnline');
+      const btnLocal = document.getElementById('btnInputLocal');
+      if (mode === 'local') {
+        btnLocal.className = 'px-3 py-1 rounded-md text-xs font-semibold transition cursor-pointer bg-sky-500 text-slate-950';
+        btnOnline.className = 'px-3 py-1 rounded-md text-xs font-semibold transition cursor-pointer text-[var(--text-muted)] hover:text-[var(--text-main)]';
+        const inp = document.getElementById('input_folder');
+        if (!inp.value.trim()) inp.value = 'viro_3d_structures';
+      } else {
+        btnOnline.className = 'px-3 py-1 rounded-md text-xs font-semibold transition cursor-pointer bg-sky-500 text-slate-950';
+        btnLocal.className = 'px-3 py-1 rounded-md text-xs font-semibold transition cursor-pointer text-[var(--text-muted)] hover:text-[var(--text-main)]';
+        document.getElementById('input_folder').value = '';
+      }
+      updateUI();
+    }
+
+    function onGuideTreeMethodChange() {
+      const m = document.getElementById('guide_tree_method').value;
+      const minTaxaEl = document.getElementById('guide_tree_min_taxa');
+      // When switching to foldmason guide trees, if min_taxa was still at 80, set it to 4 so all eligible clusters use their FoldMason guide tree by default
+      if (m === 'foldmason' && minTaxaEl.value === '80') {
+        minTaxaEl.value = '4';
+      } else if (m === 'fasttree' && minTaxaEl.value === '4') {
+        minTaxaEl.value = '80';
+      }
+      updateUI();
+    }
+
+    function toggleDbChip(dbName) {
+      const el = document.getElementById('search_databases');
+      const curr = el.value.split(',').map(s => s.trim()).filter(Boolean);
+      const idx = curr.indexOf(dbName);
+      if (idx >= 0) {
+        if (curr.length > 1) curr.splice(idx, 1);
+      } else {
+        curr.push(dbName);
+      }
+      el.value = curr.join(',');
+      updateUI();
+    }
+
+    function showEl(id, visible) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (visible) el.classList.remove('hidden');
+      else el.classList.add('hidden');
+    }
+
+    function updatePanelVisibility() {
+      const cmd = currentSubcommand;
+      const chainPipe = cmd === 'search' && document.getElementById('search_chain_pipeline').checked;
+      const showPipePanels = (cmd === 'pipeline') || chainPipe;
+
+      showEl('panel-search', cmd === 'search');
+      showEl('panel-input', showPipePanels || cmd === 'fetch');
+      showEl('panel-clustering', showPipePanels || cmd === 'align');
+      showEl('panel-align', showPipePanels || cmd === 'align');
+      showEl('panel-tree', showPipePanels || cmd === 'tree');
+      showEl('panel-embed', showPipePanels || cmd === 'embed');
+      showEl('panel-report', cmd === 'report');
+      showEl('panel-compute', true);
+
+      // Input panel sub-elements
+      showEl('inputModeSwitchWrap', showPipePanels && !chainPipe);
+      showEl('wrap-input_folder', showPipePanels);
+      showEl('wrap-metadata', showPipePanels);
+
+      // Clustering panel sub-elements
+      showEl('wrap-cluster_recurse_toggle', showPipePanels);
+      showEl('clusteringPipelineFields', showPipePanels);
+      showEl('clusteringAdvancedWrap', showPipePanels);
+
+      // Align panel sub-elements
+      showEl('wrap-align_folder', cmd === 'align');
+      showEl('wrap-align_output_dir', cmd === 'align');
+      showEl('wrap-foldmason_bin', cmd === 'align');
+      showEl('wrap-mafft_leavegappyregion', showPipePanels);
+
+      // Tree panel sub-elements
+      showEl('wrap-tree_alignment', cmd === 'tree');
+      showEl('wrap-tree_alignment_aa', cmd === 'tree');
+      showEl('wrap-master_method', showPipePanels);
+      showEl('wrap-criterion', cmd === 'tree');
+      showEl('wrap-tree_output_dir', cmd === 'tree');
+      showEl('wrap-tree_prefix', cmd === 'tree');
+      showEl('wrap-iqtree_bin', cmd === 'tree');
+
+      // Embed panel sub-elements
+      showEl('wrap-embed_toggle', showPipePanels);
+      showEl('wrap-embed_input', cmd === 'embed');
+      showEl('wrap-embed_output_dir', cmd === 'embed');
+      showEl('wrap-embed_prefix', cmd === 'embed');
+      showEl('wrap-embed_batch_size', cmd === 'embed');
+      showEl('wrap-embed_max_length', cmd === 'embed');
+      document.getElementById('embedModelFlag').textContent = cmd === 'embed' ? '-m / --model' : '--embed-model';
+      document.getElementById('embedClusteringFlag').textContent = cmd === 'embed' ? '-c / --clustering' : '--embed-clustering';
+      document.getElementById('embedMetricFlag').textContent = cmd === 'embed' ? '--metric' : '--embed-metric';
+
+      // Compute panel sub-elements
+      showEl('wrap-threads', cmd !== 'fetch' && cmd !== 'report');
+      showEl('wrap-tree_threads', showPipePanels);
+      showEl('wrap-tree_jobs', showPipePanels);
+      showEl('wrap-zip', showPipePanels);
+      showEl('wrap-zip_path', showPipePanels);
+    }
+
+    function updateContextualDisabling() {
+      const cmd = currentSubcommand;
+      const chainPipe = cmd === 'search' && document.getElementById('search_chain_pipeline').checked;
+      const isPipe = cmd === 'pipeline' || chainPipe;
+
+      // Online vs Local input fields
+      const inpFolder = document.getElementById('input_folder');
+      if (chainPipe) {
+        const sOut = document.getElementById('search_output_dir').value.trim() || 'search_cohort';
+        inpFolder.value = sOut.replace(/\/+$/, '') + '/structures';
+        inpFolder.disabled = true;
+      } else {
+        inpFolder.disabled = (cmd === 'pipeline' && currentInputMode === 'online');
+      }
+
+      const usingLocal = isPipe && (currentInputMode === 'local' || chainPipe || inpFolder.value.trim() !== '');
+      ['source', 'qualifier', 'count', 'uniprot', 'uniprot_file', 'format', 'download_pae'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = usingLocal;
+      });
+
+      if (!usingLocal) {
+        const src = document.getElementById('source').value;
+        const isAf = src === 'alphafold' || src === 'afdb' ||
+                     document.getElementById('uniprot').value.trim() !== '' ||
+                     document.getElementById('uniprot_file').value.trim() !== '';
+        document.getElementById('format').disabled = !isAf;
+        document.getElementById('download_pae').disabled = !isAf;
+      }
+
+      // Aligner fields
+      const isMafft = document.getElementById('aligner').value === 'mafft';
+      document.getElementById('mafft_matrix').disabled = !isMafft;
+      document.getElementById('mafft_bin').disabled = !isMafft;
+      document.getElementById('mafft_leavegappyregion').disabled = !isMafft;
+
+      // Clustering fields
+      const multiAln = document.getElementById('multi_alignment').checked;
+      const cMode = document.getElementById('cluster_mode').value;
+      const cSweep = document.getElementById('cluster_sweep').checked;
+      const cRecurse = document.getElementById('cluster_recurse').checked;
+
+      ['cluster_mode', 'cluster_sweep'].forEach(id => {
+        document.getElementById(id).disabled = !multiAln;
+      });
+      document.getElementById('cluster_coverage').disabled = !multiAln || cMode === 'plm';
+      document.getElementById('cluster_evalue').disabled = !multiAln || cMode !== 'structural';
+      document.getElementById('cluster_tmscore').disabled = !multiAln || cMode !== 'structural';
+      document.getElementById('cluster_min_seq_id').disabled = !multiAln || cMode !== 'sequence';
+      const isPlmCluster = multiAln && cMode === 'plm';
+      document.getElementById('plm_algorithm').disabled = !isPlmCluster;
+      document.getElementById('plm_k').disabled = !isPlmCluster;
+      const plmAutoK = isPlmCluster && (document.getElementById('plm_k').value.trim() === '' || cSweep);
+      document.getElementById('plm_k_min').disabled = !plmAutoK;
+      document.getElementById('plm_k_max').disabled = !plmAutoK;
+      document.getElementById('cluster_min_size').disabled = !multiAln || (!cSweep && !plmAutoK);
+      document.getElementById('cluster_min_retained').disabled = !multiAln || (!cSweep && !plmAutoK);
+
+      ['recurse_max_depth', 'recurse_max_gap', 'recurse_max_expansion', 'recurse_on', 'recurse_min_kept'].forEach(id => {
+        document.getElementById(id).disabled = !cRecurse;
+      });
+
+      // Guide tree controls (only relevant when IQ-TREE is used)
+      const isIqtree = document.getElementById('method').value === 'iqtree' ||
+                       (isPipe && ['auto', 'iqtree'].includes(document.getElementById('master_method').value));
+      document.getElementById('guide_trees').disabled = !isIqtree;
+      const guideOn = isIqtree && document.getElementById('guide_trees').checked;
+      document.getElementById('guide_tree_method').disabled = !guideOn;
+      document.getElementById('guide_tree_min_taxa').disabled = !guideOn;
+
+      // Embed fields in pipeline mode
+      const embedEnabled = (cmd === 'embed') || document.getElementById('embed').checked || (isPipe && isPlmCluster);
+      ['embed_model', 'embed_clustering', 'embed_metric'].forEach(id => {
+        document.getElementById(id).disabled = !embedEnabled;
+      });
+
+      // ZIP path enabled only when --zip is checked
+      const zipEl = document.getElementById('zip');
+      const zipPathEl = document.getElementById('zip_path');
+      if (zipEl && zipPathEl) {
+        zipPathEl.disabled = !zipEl.checked;
+      }
+
+      // Parallel jobs hint
+      const tVal = parseInt(document.getElementById('threads').value, 10);
+      const ttVal = parseInt(document.getElementById('tree_threads').value, 10);
+      const hintEl = document.getElementById('parallelJobsHint');
+      if (!isNaN(tVal) && !isNaN(ttVal) && ttVal > 0) {
+        const autoJobs = Math.max(1, Math.floor(tVal / ttVal));
+        hintEl.textContent = `Auto-calculated: ${autoJobs} concurrent cluster tree job(s) (${tVal} / ${ttVal}).`;
+      } else {
+        hintEl.textContent = `Defaults to floor(--threads / --tree-threads).`;
+      }
+    }
+
+    function isModified(id) {
+      const el = document.getElementById(id);
+      if (!el || el.disabled) return false;
+      const def = el.getAttribute('data-default');
+      if (def === null) return false;
+      if (el.type === 'checkbox') {
+        return String(el.checked) !== def;
+      }
+      const v = el.value.trim();
+      if (el.type === 'number' && v !== '' && def !== '') {
+        return Number(v) !== Number(def);
+      }
+      return v !== def;
+    }
+
+    function highlightModifiedFields() {
+      let modCount = 0;
+      document.querySelectorAll('[id^="wrap-"]').forEach(wrap => {
+        if (wrap.classList.contains('hidden')) return;
+        const inputs = wrap.querySelectorAll('input, select');
+        let anyMod = false;
+        inputs.forEach(inp => {
+          if (inp.id && isModified(inp.id)) anyMod = true;
+        });
+        if (anyMod) {
+          wrap.classList.add('is-modified');
+          modCount++;
+        } else {
+          wrap.classList.remove('is-modified');
+        }
+      });
+      const badge = document.getElementById('modifiedCountBadge');
+      badge.textContent = modCount > 0 ? `(${modCount} customized parameter${modCount === 1 ? '' : 's'})` : '(using defaults)';
+    }
+
+    function addArg(args, flag, id, forceInclude = false) {
+      const el = document.getElementById(id);
+      if (!el || el.disabled) return;
+      const val = el.value.trim();
+      if (val === '') return;
+      const verbose = document.getElementById('opt_include_defaults').checked;
+      if (forceInclude || verbose || isModified(id)) {
+        args.push([flag, shellQuote(val)]);
+      }
+    }
+
+    function addFlag(args, flag, id) {
+      const el = document.getElementById(id);
+      if (!el || el.disabled) return;
+      if (el.checked) {
+        args.push([flag]);
+      }
+    }
+
+    function buildPipelineArgs() {
+      const args = [['viral-phylo', 'pipeline']];
+      const chainPipe = currentSubcommand === 'search' && document.getElementById('search_chain_pipeline').checked;
+      const inpFolder = document.getElementById('input_folder').value.trim();
+      const usingLocal = currentInputMode === 'local' || chainPipe || inpFolder !== '';
+
+      if (usingLocal) {
+        args.push(['--input-folder', shellQuote(inpFolder || 'viro_3d_structures')]);
+      } else {
+        addArg(args, '--source', 'source');
+        addArg(args, '--qualifier', 'qualifier', true);
+        addArg(args, '--uniprot', 'uniprot');
+        addArg(args, '--uniprot-file', 'uniprot_file');
+        addArg(args, '--count', 'count', true);
+        addArg(args, '--format', 'format');
+        addFlag(args, '--download-pae', 'download_pae');
+      }
+
+      addArg(args, '--metadata', 'metadata');
+      addArg(args, '--output-dir', 'output_dir', true);
+
+      // Alignment
+      addArg(args, '--aligner', 'aligner');
+      addArg(args, '--mafft-bin', 'mafft_bin');
+      addArg(args, '--mafft-matrix', 'mafft_matrix');
+      addFlag(args, '--mafft-leavegappyregion', 'mafft_leavegappyregion');
+      addArg(args, '--min-coverage', 'min_coverage');
+      addFlag(args, '--filter-coverage', 'filter_coverage');
+
+      // QC & Clustering
+      addArg(args, '--min-seq-length', 'min_seq_length');
+      addArg(args, '--min-length-frac', 'min_length_frac');
+      addArg(args, '--full-set-max-gap', 'full_set_max_gap');
+      addArg(args, '--full-set-max-expansion', 'full_set_max_expansion');
+
+      if (document.getElementById('multi_alignment').checked) {
+        args.push(['--multi-alignment']);
+        addArg(args, '--cluster-mode', 'cluster_mode');
+        addArg(args, '--cluster-evalue', 'cluster_evalue');
+        addArg(args, '--cluster-coverage', 'cluster_coverage');
+        addArg(args, '--cluster-min-seq-id', 'cluster_min_seq_id');
+        addArg(args, '--cluster-tmscore', 'cluster_tmscore');
+        addArg(args, '--plm-algorithm', 'plm_algorithm');
+        addArg(args, '--plm-k', 'plm_k');
+        addArg(args, '--plm-k-min', 'plm_k_min');
+        addArg(args, '--plm-k-max', 'plm_k_max');
+        if (document.getElementById('cluster_sweep').checked) {
+          args.push(['--cluster-sweep']);
+        }
+        addArg(args, '--cluster-min-size', 'cluster_min_size');
+        addArg(args, '--cluster-min-retained', 'cluster_min_retained');
+      }
+
+      if (document.getElementById('cluster_recurse').checked) {
+        args.push(['--cluster-recurse']);
+        addArg(args, '--recurse-max-depth', 'recurse_max_depth');
+        addArg(args, '--recurse-max-gap', 'recurse_max_gap');
+        addArg(args, '--recurse-max-expansion', 'recurse_max_expansion');
+        addArg(args, '--recurse-on', 'recurse_on');
+        addArg(args, '--recurse-min-kept', 'recurse_min_kept');
+      }
+
+      // Phylogeny
+      addArg(args, '--tree-type', 'tree_type', true);
+      addArg(args, '--method', 'method');
+      addArg(args, '--master-method', 'master_method');
+      addArg(args, '--matrix', 'matrix');
+      addArg(args, '--rate-heterogeneity', 'rate_heterogeneity');
+      addArg(args, '--bootstrap', 'bootstrap');
+      addArg(args, '--alrt', 'alrt');
+      addFlag(args, '--fast', 'fast');
+
+      const guideEl = document.getElementById('guide_trees');
+      if (!guideEl.disabled) {
+        const guideOn = guideEl.checked;
+        const verbose = document.getElementById('opt_include_defaults').checked;
+        if (!guideOn) {
+          args.push(['--no-guide-trees']);
+        } else if (verbose) {
+          args.push(['--guide-trees']);
+        }
+        addArg(args, '--guide-tree-method', 'guide_tree_method');
+        addArg(args, '--guide-tree-min-taxa', 'guide_tree_min_taxa');
+      }
+
+      // PLM Embeddings
+      const isPlmCluster = document.getElementById('multi_alignment').checked &&
+                           document.getElementById('cluster_mode').value === 'plm';
+      if (document.getElementById('embed').checked || isPlmCluster) {
+        if (document.getElementById('embed').checked) {
+          args.push(['--embed']);
+        }
+        addArg(args, '--embed-model', 'embed_model');
+        addArg(args, '--embed-clustering', 'embed_clustering');
+        addArg(args, '--embed-metric', 'embed_metric');
+      }
+
+      // Compute
+      addArg(args, '--threads', 'threads');
+      addArg(args, '--tree-threads', 'tree_threads');
+      addArg(args, '--tree-jobs', 'tree_jobs');
+
+      // Portable Report ZIP Archive
+      const zipEl = document.getElementById('zip');
+      if (zipEl) {
+        const zipOn = zipEl.checked;
+        const verbose = document.getElementById('opt_include_defaults').checked;
+        if (!zipOn) {
+          args.push(['--no-zip']);
+        } else if (verbose) {
+          args.push(['--zip']);
+        }
+        if (zipOn) {
+          addArg(args, '--zip-path', 'zip_path');
+        }
+      }
+
+      return args;
+    }
+
+    function buildSearchArgs() {
+      const args = [['viral-phylo', 'search']];
+      if (document.getElementById('search_list_databases').checked) {
+        args.push(['--list-databases']);
+        return args;
+      }
+      const qVal = document.getElementById('search_query').value.trim() || '<QUERY_PROTEIN_OR_PDB>';
+      args.push(['--query', shellQuote(qVal)]);
+      addArg(args, '--output-dir', 'search_output_dir', true);
+
+      const dbsRaw = document.getElementById('search_databases').value.trim();
+      const dbs = dbsRaw ? dbsRaw.split(',').map(s => s.trim()).filter(Boolean) : ['bfvd_v3'];
+      const verbose = document.getElementById('opt_include_defaults').checked;
+      if (verbose || !(dbs.length === 1 && dbs[0] === 'bfvd_v3')) {
+        dbs.forEach(db => args.push(['-d', shellQuote(db)]));
+      }
+
+      addArg(args, '--max-hits', 'search_max_hits');
+      addArg(args, '--max-evalue', 'search_max_evalue');
+      addArg(args, '--min-coverage', 'search_min_coverage');
+      addArg(args, '--min-aln-length', 'search_min_aln_length');
+      addFlag(args, '--exclude-self', 'search_exclude_self');
+      addFlag(args, '--no-taxonomy', 'search_no_taxonomy');
+      addFlag(args, '--no-lddt', 'search_no_lddt');
+      addArg(args, '--threads', 'threads');
+      addArg(args, '--workers', 'search_workers');
+      return args;
+    }
+
+    function buildFetchArgs() {
+      const args = [['viral-phylo', 'fetch']];
+      addArg(args, '--source', 'source');
+      addArg(args, '--qualifier', 'qualifier', true);
+      addArg(args, '--uniprot', 'uniprot');
+      addArg(args, '--uniprot-file', 'uniprot_file');
+      addArg(args, '--max-sequences', 'count', true);
+      addArg(args, '--format', 'format');
+      addFlag(args, '--download-pae', 'download_pae');
+      addArg(args, '--output-dir', 'output_dir', true);
+      return args;
+    }
+
+    function buildAlignArgs() {
+      const args = [['viral-phylo', 'align']];
+      addArg(args, '--folder', 'align_folder', true);
+      addArg(args, '--output-dir', 'align_output_dir', true);
+      addArg(args, '--aligner', 'aligner');
+      addArg(args, '--foldmason-bin', 'foldmason_bin');
+      addArg(args, '--mafft-bin', 'mafft_bin');
+      addArg(args, '--mafft-matrix', 'mafft_matrix');
+      addArg(args, '--min-coverage', 'min_coverage');
+      addFlag(args, '--multi-alignment', 'multi_alignment');
+      addFlag(args, '--filter-coverage', 'filter_coverage');
+      addArg(args, '--threads', 'threads');
+      return args;
+    }
+
+    function buildTreeArgs() {
+      const args = [['viral-phylo', 'tree']];
+      addArg(args, '--alignment', 'tree_alignment', true);
+      addArg(args, '--alignment-aa', 'tree_alignment_aa');
+      addArg(args, '--tree-type', 'tree_type');
+      addArg(args, '--method', 'method', true);
+      addArg(args, '--matrix', 'matrix');
+      addArg(args, '--rate-heterogeneity', 'rate_heterogeneity');
+      addArg(args, '--criterion', 'criterion');
+      addArg(args, '--bootstrap', 'bootstrap');
+      addArg(args, '--alrt', 'alrt');
+      addArg(args, '--threads', 'threads');
+      addFlag(args, '--fast', 'fast');
+      addArg(args, '--output-dir', 'tree_output_dir', true);
+      addArg(args, '--prefix', 'tree_prefix');
+      addArg(args, '--iqtree-bin', 'iqtree_bin');
+
+      const guideEl = document.getElementById('guide_trees');
+      if (!guideEl.disabled) {
+        const guideOn = guideEl.checked;
+        const verbose = document.getElementById('opt_include_defaults').checked;
+        if (!guideOn) {
+          args.push(['--no-guide-trees']);
+        } else if (verbose) {
+          args.push(['--guide-trees']);
+        }
+        addArg(args, '--guide-tree-method', 'guide_tree_method');
+        addArg(args, '--guide-tree-min-taxa', 'guide_tree_min_taxa');
+      }
+      return args;
+    }
+
+    function buildEmbedArgs() {
+      const args = [['viral-phylo', 'embed']];
+      const inp = document.getElementById('embed_input').value.trim() || 'foldmason_alignments/foldmason.fasta_aa.fa';
+      args.push(['--input', shellQuote(inp)]);
+      addArg(args, '--output-dir', 'embed_output_dir', true);
+      addArg(args, '--model', 'embed_model', true);
+      addArg(args, '--clustering', 'embed_clustering');
+      addArg(args, '--metric', 'embed_metric');
+      addArg(args, '--prefix', 'embed_prefix');
+      addArg(args, '--batch-size', 'embed_batch_size');
+      addArg(args, '--max-length', 'embed_max_length');
+      addArg(args, '--threads', 'threads');
+      return args;
+    }
+
+    function buildReportArgs() {
+      const args = [['viral-phylo', 'report']];
+      const runDir = document.getElementById('report_run_dir') ? document.getElementById('report_run_dir').value.trim() : '';
+      if (runDir) {
+        args.push(['--run-dir', shellQuote(runDir)]);
+        addArg(args, '--output', 'report_output');
+        return args;
+      }
+      const treeFile = document.getElementById('report_tree').value.trim() || '<PATH_TO_TREEFILE>';
+      args.push(['--tree', shellQuote(treeFile)]);
+      addArg(args, '--metadata', 'report_metadata');
+      addArg(args, '--output', 'report_output');
+      addArg(args, '--title', 'report_title');
+      return args;
+    }
+
+    function formatCommandParts(argGroups) {
+      const multiline = document.getElementById('opt_multiline').checked;
+      if (!multiline) {
+        return argGroups.map(g => g.join(' ')).join(' ');
+      }
+      return argGroups.map((g, i) => (i === 0 ? g.join(' ') : '  ' + g.join(' '))).join(' \\\n');
+    }
+
+    function validateCurrentSettings() {
+      const warnings = [];
+      const cmd = currentSubcommand;
+      const chainPipe = cmd === 'search' && document.getElementById('search_chain_pipeline').checked;
+      const isPipe = cmd === 'pipeline' || chainPipe;
+      const checksTree = isPipe || cmd === 'tree';
+      const cModeVal = document.getElementById('cluster_mode').value;
+      const checksEmbed = (cmd === 'embed') || (isPipe && (
+        document.getElementById('embed').checked ||
+        (document.getElementById('multi_alignment').checked && ['plm', 'sequence_plm', 'both', 'structural_plm', 'all'].includes(cModeVal))
+      ));
+
+      if (checksTree) {
+        const bs = parseInt(document.getElementById('bootstrap').value, 10);
+        if (!isNaN(bs) && bs > 0 && bs < 1000) {
+          warnings.push({
+            level: 'error',
+            text: `IQ-TREE's ultrafast bootstrap (--bootstrap ${bs}) requires at least 1000 replicates, or 0 to disable.`
+          });
+        }
+        const alrt = parseInt(document.getElementById('alrt').value, 10);
+        if (!isNaN(alrt) && alrt > 0 && alrt < 1000) {
+          warnings.push({
+            level: 'error',
+            text: `SH-aLRT (--alrt ${alrt}) requires at least 1000 replicates, or 0 to disable.`
+          });
+        }
+        if (isPipe && document.getElementById('guide_trees').checked &&
+            document.getElementById('guide_tree_method').value === 'foldmason' &&
+            document.getElementById('aligner').value === 'mafft') {
+          warnings.push({
+            level: 'warn',
+            text: `--guide-tree-method foldmason requires FoldMason alignments (foldmason.fasta.nw); with --aligner mafft, clusters will run unguided.`
+          });
+        }
+      }
+
+      if (cmd !== 'fetch' && cmd !== 'report') {
+        const th = document.getElementById('threads').value.trim().toUpperCase();
+        if (th === 'AUTO') {
+          warnings.push({
+            level: 'warn',
+            text: `--threads AUTO removes the CPU cap and causes IQ-TREE to benchmark every core count, which can be very slow on many-core machines.`
+          });
+        }
+      }
+
+      if (checksEmbed) {
+        const clust = document.getElementById('embed_clustering').value;
+        if (clust === 'nj') {
+          warnings.push({
+            level: 'warn',
+            text: `Neighbor-Joining (nj) produces no linkage matrix, so silhouette clade profiles will be skipped. Use upgma (default), average, complete, or ward for silhouette scores.`
+          });
+        }
+      }
+
+      if (cmd === 'search' && !document.getElementById('search_list_databases').checked) {
+        if (!document.getElementById('search_query').value.trim()) {
+          warnings.push({
+            level: 'warn',
+            text: `Enter a query structure path or UniProt/NCBI accession in --query.`
+          });
+        }
+      }
+
+      if (cmd === 'report' && !document.getElementById('report_tree').value.trim() &&
+          !(document.getElementById('report_run_dir') && document.getElementById('report_run_dir').value.trim())) {
+        warnings.push({
+          level: 'warn',
+          text: `Specify either a tree file in --tree or a completed workflow directory in --run-dir.`
+        });
+      }
+
+      const bar = document.getElementById('validationBar');
+      if (warnings.length === 0) {
+        bar.classList.add('hidden');
+        bar.innerHTML = '';
+      } else {
+        bar.classList.remove('hidden');
+        bar.classList.add('flex');
+        bar.innerHTML = warnings.map(w => {
+          const cls = w.level === 'error'
+            ? 'bg-rose-500/15 text-rose-300 border-rose-500/40'
+            : 'bg-amber-500/15 text-amber-300 border-amber-500/40';
+          const icon = w.level === 'error' ? '⛔' : '⚠️';
+          return `<div class="px-2.5 py-1 rounded-lg border ${cls} flex items-center space-x-1.5"><span>${icon}</span><span>${w.text}</span></div>`;
+        }).join('');
+      }
+    }
+
+    function generateCommandString() {
+      const cmd = currentSubcommand;
+      let mainStr = '';
+
+      if (cmd === 'pipeline') {
+        mainStr = formatCommandParts(buildPipelineArgs());
+      } else if (cmd === 'search') {
+        const searchStr = formatCommandParts(buildSearchArgs());
+        if (document.getElementById('search_chain_pipeline').checked && !document.getElementById('search_list_databases').checked) {
+          const pipeStr = formatCommandParts(buildPipelineArgs());
+          mainStr = searchStr + ' && \\\n' + pipeStr;
+        } else {
+          mainStr = searchStr;
+        }
+      } else if (cmd === 'fetch') {
+        mainStr = formatCommandParts(buildFetchArgs());
+      } else if (cmd === 'align') {
+        mainStr = formatCommandParts(buildAlignArgs());
+      } else if (cmd === 'tree') {
+        mainStr = formatCommandParts(buildTreeArgs());
+      } else if (cmd === 'embed') {
+        mainStr = formatCommandParts(buildEmbedArgs());
+      } else if (cmd === 'report') {
+        mainStr = formatCommandParts(buildReportArgs());
+      }
+
+      if (document.getElementById('opt_rebuild_dashboard').checked) {
+        mainStr += (document.getElementById('opt_multiline').checked ? ' && \\\n  build-alignments && build-tree-view' : ' && build-alignments && build-tree-view');
+      }
+
+      if (document.getElementById('opt_nohup').checked) {
+        const singleLineInner = mainStr.replace(/\\\n\s*/g, ' ');
+        const rawOut = (document.getElementById('output_dir') && document.getElementById('output_dir').value.trim()) || 'results/glycoprotein_workflow';
+        const logDir = rawOut.includes('/') ? rawOut : `results/${rawOut}`;
+        mainStr = `mkdir -p ${shellQuote(logDir)} && nohup bash -c ${shellQuote(singleLineInner)} > ${shellQuote(logDir + '/run.log')} 2>&1 &`;
+      }
+
+      if (document.getElementById('opt_conda_activate').checked) {
+        mainStr = `conda activate spt &&\n` + mainStr;
+      }
+
+      return mainStr;
+    }
+
+    function updateUI() {
+      updatePanelVisibility();
+      updateContextualDisabling();
+      highlightModifiedFields();
+      validateCurrentSettings();
+      const cmdStr = generateCommandString();
+      document.getElementById('commandOutput').textContent = cmdStr;
+    }
+
+    function resetAllFieldsToDefaults() {
+      document.querySelectorAll('input, select').forEach(el => {
+        if (el.id && el.id.startsWith('opt_')) return;
+        const def = el.getAttribute('data-default');
+        if (def === null) return;
+        if (el.type === 'checkbox') {
+          el.checked = (def === 'true');
+        } else {
+          el.value = def;
+        }
+      });
+      document.getElementById('search_chain_pipeline').checked = false;
+      currentInputMode = 'online';
+      setInputMode('online');
+    }
+
+    function resetCurrentMode() {
+      resetAllFieldsToDefaults();
+      setSubcommand(currentSubcommand);
+    }
+
+    function applyPreset(presetName) {
+      resetAllFieldsToDefaults();
+
+      if (presetName === 'local_standard') {
+        setSubcommand('pipeline');
+        setInputMode('local');
+        document.getElementById('input_folder').value = '/path/to/my_structures';
+        document.getElementById('tree_type').value = 'both';
+        document.getElementById('matrix').value = 'alphafold';
+        document.getElementById('output_dir').value = 'results/local_workflow';
+      } else if (presetName === 'viro3d_500') {
+        setSubcommand('pipeline');
+        setInputMode('online');
+        document.getElementById('qualifier').value = 'glycoprotein';
+        document.getElementById('count').value = '500';
+        document.getElementById('tree_type').value = 'both';
+        document.getElementById('rate_heterogeneity').value = 'auto';
+        document.getElementById('output_dir').value = 'results/glycoprotein_500_workflow';
+      } else if (presetName === 'large_divergent') {
+        setSubcommand('pipeline');
+        setInputMode('local');
+        document.getElementById('input_folder').value = '/path/to/structures';
+        document.getElementById('metadata').value = '/path/to/metadata.csv';
+        document.getElementById('output_dir').value = 'results/large_run';
+        document.getElementById('multi_alignment').checked = true;
+        document.getElementById('cluster_recurse').checked = true;
+        document.getElementById('tree_type').value = 'both';
+        document.getElementById('matrix').value = 'alphafold';
+        document.getElementById('embed').checked = true;
+        document.getElementById('embed_clustering').value = 'upgma';
+      } else if (presetName === 'mmseqs_vs_plm') {
+        setSubcommand('pipeline');
+        setInputMode('local');
+        document.getElementById('input_folder').value = '/path/to/structures';
+        document.getElementById('metadata').value = '/path/to/metadata.csv';
+        document.getElementById('output_dir').value = 'results/mmseqs_vs_plm_comparison';
+        document.getElementById('multi_alignment').checked = true;
+        document.getElementById('cluster_mode').value = 'sequence_plm';
+        document.getElementById('cluster_sweep').checked = true;
+        document.getElementById('plm_algorithm').value = 'kmeans';
+        document.getElementById('plm_k').value = '';
+        document.getElementById('tree_type').value = 'both';
+        document.getElementById('matrix').value = 'alphafold';
+        document.getElementById('embed').checked = true;
+        document.getElementById('embed_clustering').value = 'upgma';
+      } else if (presetName === 'foldmason_guided_clusters') {
+        setSubcommand('pipeline');
+        setInputMode('local');
+        document.getElementById('input_folder').value = '/path/to/structures';
+        document.getElementById('output_dir').value = 'results/foldmason_guided_run';
+        document.getElementById('multi_alignment').checked = true;
+        document.getElementById('cluster_recurse').checked = true;
+        document.getElementById('tree_type').value = 'both';
+        document.getElementById('matrix').value = 'alphafold';
+        document.getElementById('guide_trees').checked = true;
+        document.getElementById('guide_tree_method').value = 'foldmason';
+        document.getElementById('guide_tree_min_taxa').value = '4';
+      } else if (presetName === 'fast_overview') {
+        setSubcommand('pipeline');
+        setInputMode('local');
+        document.getElementById('input_folder').value = '/path/to/structures';
+        document.getElementById('method').value = 'fasttree';
+        document.getElementById('master_method').value = 'fasttree';
+        document.getElementById('matrix').value = 'alphafold';
+        document.getElementById('tree_type').value = '3di';
+        document.getElementById('output_dir').value = 'results/fasttree_overview';
+      } else if (presetName === 'search_and_pipe') {
+        setSubcommand('search');
+        document.getElementById('search_query').value = 'YP_009724396.1';
+        document.getElementById('search_output_dir').value = 'results/orf8_cohort';
+        document.getElementById('search_chain_pipeline').checked = true;
+        document.getElementById('output_dir').value = 'results/orf8_workflow';
+        document.getElementById('multi_alignment').checked = true;
+        document.getElementById('cluster_recurse').checked = true;
+        document.getElementById('embed').checked = true;
+      }
+
+      updateUI();
+    }
+
+    async function copyCommand() {
+      const text = document.getElementById('commandOutput').textContent;
+      const btn = document.getElementById('copyBtn');
+      const icon = document.getElementById('copyBtnIcon');
+      const label = document.getElementById('copyBtnText');
+
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch (err) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+
+      icon.textContent = '✅';
+      label.textContent = 'Copied to Clipboard!';
+      btn.classList.replace('bg-sky-500', 'bg-emerald-500');
+      btn.classList.replace('hover:bg-sky-400', 'hover:bg-emerald-400');
+
+      setTimeout(() => {
+        icon.textContent = '📋';
+        label.textContent = 'Copy Command';
+        btn.classList.replace('bg-emerald-500', 'bg-sky-500');
+        btn.classList.replace('hover:bg-emerald-400', 'hover:bg-sky-400');
+      }, 1800);
+    }
+
+    function downloadShellScript() {
+      const cmd = generateCommandString();
+      const content = `#!/usr/bin/env bash\nset -euo pipefail\n\n# Generated by The Structural Phylogenetics Toolkit — Run Configurator\n${cmd}\n`;
+      const blob = new Blob([content], { type: 'text/x-shellscript' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `run_viral_phylo_${currentSubcommand}.sh`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // Initialize on load
+    (function init() {
+      try {
+        const savedTheme = localStorage.getItem('spt_config_theme');
+        if (savedTheme === 'light' || savedTheme === 'dark') {
+          document.documentElement.setAttribute('data-theme', savedTheme);
+          document.getElementById('themeBtn').textContent = savedTheme === 'dark' ? '🌙 Dark' : '☀️ Light';
+        }
+      } catch (e) {}
+      setSubcommand('pipeline');
+      setInputMode('online');
+    })();
+  </script>
+</body>
+</html>

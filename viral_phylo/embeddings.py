@@ -22,7 +22,17 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import numpy as np
 
 
+from viral_phylo.alignment import parse_alignment_fasta
 from viral_phylo.binaries import find_torch_python
+from viral_phylo.structures import parse_structure_ca
+
+_THREE_TO_ONE = {
+    "ALA": "A", "ARG": "R", "ASN": "N", "ASP": "D", "CYS": "C",
+    "GLN": "Q", "GLU": "E", "GLY": "G", "HIS": "H", "ILE": "I",
+    "LEU": "L", "LYS": "K", "MET": "M", "PHE": "F", "PRO": "P",
+    "SER": "S", "THR": "T", "TRP": "W", "TYR": "Y", "VAL": "V",
+    "MSE": "M",
+}
 
 
 def extract_sequences_from_fasta(fasta_path: str) -> List[Tuple[str, str]]:
@@ -31,44 +41,20 @@ def extract_sequences_from_fasta(fasta_path: str) -> List[Tuple[str, str]]:
     Gaps ('-') and whitespace are automatically removed to present the native
     unaligned biological context to the protein language model.
     """
-    records = []
     if not os.path.isfile(fasta_path):
         raise FileNotFoundError(f"FASTA file not found: {fasta_path}")
 
-    with open(fasta_path, "r", encoding="utf-8", errors="ignore") as f:
-        header = None
-        seq_parts = []
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            if line.startswith(">"):
-                if header:
-                    clean_seq = "".join(seq_parts).replace("-", "").replace(".", "").upper()
-                    if clean_seq:
-                        records.append((header, clean_seq))
-                header = line[1:].strip().split()[0]
-                seq_parts = []
-            else:
-                seq_parts.append(line)
-        if header:
-            clean_seq = "".join(seq_parts).replace("-", "").replace(".", "").upper()
-            if clean_seq:
-                records.append((header, clean_seq))
-
+    records = []
+    for header, seq in parse_alignment_fasta(fasta_path).items():
+        clean_seq = seq.replace("-", "").replace(".", "").upper()
+        if clean_seq:
+            records.append((header, clean_seq))
     return records
 
 
 def extract_sequences_from_pdb_dir(pdb_dir: str) -> List[Tuple[str, str]]:
-    """Extract amino acid sequences from PDB structure files in a directory."""
+    """Extract amino acid sequences from PDB/mmCIF structure files in a directory."""
     import glob
-    three_to_one = {
-        'ALA': 'A', 'ARG': 'R', 'ASN': 'N', 'ASP': 'D', 'CYS': 'C',
-        'GLN': 'Q', 'GLU': 'E', 'GLY': 'G', 'HIS': 'H', 'ILE': 'I',
-        'LEU': 'L', 'LYS': 'K', 'MET': 'M', 'PHE': 'F', 'PRO': 'P',
-        'SER': 'S', 'THR': 'T', 'TRP': 'W', 'TYR': 'Y', 'VAL': 'V',
-        'MSE': 'M'
-    }
 
     files = []
     for ext in ("*.pdb", "*.cif", "*.mmcif"):
@@ -77,23 +63,9 @@ def extract_sequences_from_pdb_dir(pdb_dir: str) -> List[Tuple[str, str]]:
 
     records = []
     for p in files:
-        basename = os.path.basename(p)
-        taxon_id = os.path.splitext(basename)[0]
-        seq_res = []
-        seen_res = set()
-        with open(p, "r", encoding="utf-8", errors="ignore") as f:
-            for line in f:
-                if line.startswith("ATOM  "):
-                    atom_name = line[12:16].strip()
-                    if atom_name == "CA":
-                        res_name = line[17:20].strip()
-                        chain_id = line[21:22].strip()
-                        res_seq = line[22:27].strip()
-                        key = (chain_id, res_seq)
-                        if key not in seen_res:
-                            seen_res.add(key)
-                            seq_res.append(three_to_one.get(res_name, 'X'))
-        clean_seq = "".join(seq_res)
+        taxon_id = os.path.splitext(os.path.basename(p))[0]
+        trace = parse_structure_ca(p)
+        clean_seq = "".join(_THREE_TO_ONE.get(str(res[5]).upper(), "X") for res in trace)
         if clean_seq:
             records.append((taxon_id, clean_seq))
 

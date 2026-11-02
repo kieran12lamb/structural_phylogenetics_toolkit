@@ -1,5 +1,5 @@
 import unittest
-from scripts.metadata_handler import classify_columns, choose_default_color_column
+from viral_phylo.metadata import classify_columns, choose_default_color_column
 
 
 class TestMetadata(unittest.TestCase):

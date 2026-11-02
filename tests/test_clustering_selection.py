@@ -320,3 +320,209 @@ class TestStructuralDistanceSpace(unittest.TestCase):
         self.assertTrue(np.all(np.diag(D) == 0))
         self.assertTrue(np.all((D >= 0) & (D <= 1)))
         self.assertTrue(np.any(D < 1), "some pairs must have a real TM-score hit")
+
+
+class TestPLMClustering(unittest.TestCase):
+    """Tests for PLM embedding-space clustering (k-means, agglomerative, ward, spectral)
+    and automatic optimal-k selection by silhouette score."""
+
+    def setUp(self):
+        rng = np.random.default_rng(42)
+        # 3 well-separated clusters in 16D embedding space (10 taxa each = 30 total)
+        c1 = rng.normal(loc=[5.0, 0.0, 0.0] + [0.0] * 13, scale=0.05, size=(10, 16))
+        c2 = rng.normal(loc=[0.0, 5.0, 0.0] + [0.0] * 13, scale=0.05, size=(10, 16))
+        c3 = rng.normal(loc=[0.0, 0.0, 5.0] + [0.0] * 13, scale=0.05, size=(10, 16))
+        self.embeddings = np.vstack([c1, c2, c3])
+        self.taxa = [f"g1_{i}" for i in range(10)] + [f"g2_{i}" for i in range(10)] + [f"g3_{i}" for i in range(10)]
+
+        norms = np.linalg.norm(self.embeddings, axis=1, keepdims=True)
+        unit = self.embeddings / np.where(norms == 0, 1e-12, norms)
+        self.distance = 1.0 - np.clip(unit @ unit.T, -1.0, 1.0)
+        np.fill_diagonal(self.distance, 0.0)
+
+    def test_plm_cluster_recovers_exact_groups_across_algorithms(self):
+        from viral_phylo.clustering import plm_cluster
+        expected_sets = {
+            frozenset(f"g1_{i}" for i in range(10)),
+            frozenset(f"g2_{i}" for i in range(10)),
+            frozenset(f"g3_{i}" for i in range(10)),
+        }
+        for alg in ("kmeans", "agglomerative", "ward", "spectral"):
+            clusters = plm_cluster(self.taxa, self.embeddings, k=3, algorithm=alg, metric="cosine")
+            self.assertEqual(len(clusters), 3, f"{alg} should produce 3 clusters")
+            for rep, members in clusters.items():
+                self.assertIn(rep, members, "representative medoid must be a member of its cluster")
+                self.assertEqual(members[0], rep, "representative medoid must be first in member list")
+            got_sets = {frozenset(m) for m in clusters.values()}
+            self.assertEqual(got_sets, expected_sets, f"{alg} did not recover the 3 ground-truth clusters")
+
+    def test_sweep_plm_clusterings_picks_optimal_k_by_silhouette(self):
+        from viral_phylo.clustering import sweep_plm_clusterings
+        result = sweep_plm_clusterings(
+            self.taxa,
+            self.embeddings,
+            self.distance,
+            algorithm="kmeans",
+            metric="cosine",
+            k_min=2,
+            k_max=7,
+            min_cluster_size=5,
+            min_retained=0.70,
+            verbose=False,
+        )
+        selected = result["selected"]
+        self.assertIsNotNone(selected)
+        self.assertEqual(selected["k"], 3, "should auto-select k=3 as optimal silhouette score")
+        self.assertEqual(selected["n_clusters"], 3)
+        self.assertGreater(selected["silhouette_all"], 0.90)
+        self.assertIn("optimal PLM (kmeans) silhouette score", result["reason"])
+
+    def test_partition_structures_by_similarity_plm_mode_auto_and_fixed_k(self):
+        import json
+        import os
+        import tempfile
+        from unittest.mock import patch
+        from viral_phylo.clustering import partition_structures_by_similarity
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdb_dir = os.path.join(tmpdir, "structures")
+            os.makedirs(pdb_dir, exist_ok=True)
+            fake_seqs = {}
+            for t in self.taxa:
+                with open(os.path.join(pdb_dir, f"{t}.pdb"), "w", encoding="utf-8") as fh:
+                    fh.write("ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 90.00           C\n")
+                fake_seqs[t] = "ACDEFGHIKLMNPQRSTVWY" * 5  # 100 residues
+
+            npz_path = os.path.join(tmpdir, "embeddings.npz")
+            np.savez_compressed(npz_path, taxa=np.array(self.taxa), embeddings=self.embeddings)
+
+            def _fake_extract(structure_files, work_dir, **kwargs):
+                fa = os.path.join(work_dir, "unaligned_aa.fa")
+                with open(fa, "w", encoding="utf-8") as fh:
+                    for t, s in fake_seqs.items():
+                        fh.write(f">{t}\n{s}\n")
+                return fa, fa
+
+            def _fake_align(struct_dir, out_dir, **kwargs):
+                os.makedirs(out_dir, exist_ok=True)
+                members = [
+                    os.path.splitext(f)[0]
+                    for f in os.listdir(struct_dir)
+                    if f.endswith(".pdb")
+                ]
+                for fname in ("foldmason.fasta_3di.fa", "foldmason.fasta_aa.fa"):
+                    with open(os.path.join(out_dir, fname), "w", encoding="utf-8") as fh:
+                        for m in sorted(members):
+                            fh.write(f">{m}\n{fake_seqs[m]}\n")
+
+            with patch("viral_phylo.alignment.extract_unaligned_sequences", side_effect=_fake_extract), \
+                 patch("viral_phylo.alignment.align_structures", side_effect=_fake_align):
+                # 1. Default auto-k (optimal silhouette score -> k=3)
+                out_auto = os.path.join(tmpdir, "aln_auto")
+                summary_auto = partition_structures_by_similarity(
+                    pdb_dir,
+                    out_auto,
+                    mode="plm",
+                    embeddings_npz=npz_path,
+                    plm_algorithm="kmeans",
+                    plm_k=None,
+                    plm_k_min=2,
+                    plm_k_max=6,
+                    min_cluster_size=5,
+                )
+                self.assertEqual(summary_auto["mode"], "plm")
+                self.assertEqual(summary_auto["operating_point"]["threshold_kind"], "k")
+                self.assertEqual(summary_auto["operating_point"]["threshold"], 3)
+                self.assertEqual(summary_auto["operating_point"]["plm_k_selection"], "silhouette_auto")
+                self.assertEqual(summary_auto["num_clusters"], 3)
+                self.assertTrue(os.path.isdir(os.path.join(out_auto, "cluster_1_k3", "structures")))
+                self.assertTrue(os.path.isfile(os.path.join(out_auto, "multi_alignment_summary.json")))
+
+                # 2. Fixed k=4 provided beforehand
+                out_fixed = os.path.join(tmpdir, "aln_fixed")
+                summary_fixed = partition_structures_by_similarity(
+                    pdb_dir,
+                    out_fixed,
+                    mode="plm",
+                    embeddings_npz=npz_path,
+                    plm_algorithm="kmeans",
+                    plm_k=4,
+                    min_cluster_size=5,
+                )
+                self.assertEqual(summary_fixed["operating_point"]["threshold"], 4)
+                self.assertEqual(summary_fixed["operating_point"]["plm_k_selection"], "fixed")
+                self.assertEqual(summary_fixed["num_clusters"], 4)
+                self.assertTrue(os.path.isdir(os.path.join(out_fixed, "cluster_1_k4", "structures")))
+
+    def test_partition_structures_by_similarity_both_mmseqs_and_plm(self):
+        import os
+        import tempfile
+        from unittest.mock import patch
+        from viral_phylo.clustering import partition_structures_by_similarity, resolve_cluster_modes
+
+        self.assertEqual(resolve_cluster_modes("both"), ["sequence", "plm"])
+        self.assertEqual(resolve_cluster_modes("sequence_plm"), ["sequence", "plm"])
+        self.assertEqual(resolve_cluster_modes("structural_plm"), ["structural", "plm"])
+        self.assertEqual(resolve_cluster_modes("all"), ["structural", "sequence", "plm"])
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pdb_dir = os.path.join(tmpdir, "structures")
+            os.makedirs(pdb_dir, exist_ok=True)
+            fake_seqs = {}
+            for t in self.taxa:
+                with open(os.path.join(pdb_dir, f"{t}.pdb"), "w", encoding="utf-8") as fh:
+                    fh.write("ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 90.00           C\n")
+                fake_seqs[t] = "ACDEFGHIKLMNPQRSTVWY" * 5
+
+            npz_path = os.path.join(tmpdir, "embeddings.npz")
+            np.savez_compressed(npz_path, taxa=np.array(self.taxa), embeddings=self.embeddings)
+
+            def _fake_extract(structure_files, work_dir, **kwargs):
+                fa = os.path.join(work_dir, "unaligned_aa.fa")
+                with open(fa, "w", encoding="utf-8") as fh:
+                    for t, s in fake_seqs.items():
+                        fh.write(f">{t}\n{s}\n")
+                return fa, fa
+
+            def _fake_align(struct_dir, out_dir, **kwargs):
+                os.makedirs(out_dir, exist_ok=True)
+                members = [os.path.splitext(f)[0] for f in os.listdir(struct_dir) if f.endswith(".pdb")]
+                for fname in ("foldmason.fasta_3di.fa", "foldmason.fasta_aa.fa"):
+                    with open(os.path.join(out_dir, fname), "w", encoding="utf-8") as fh:
+                        for m in sorted(members):
+                            fh.write(f">{m}\n{fake_seqs[m]}\n")
+
+            def _fake_mmseqs(fasta_path, workdir, min_seq_id, coverage, **kwargs):
+                return {
+                    "g1_0": [f"g1_{i}" for i in range(10)],
+                    "g2_0": [f"g2_{i}" for i in range(10)],
+                    "g3_0": [f"g3_{i}" for i in range(10)],
+                }
+
+            with patch("viral_phylo.alignment.extract_unaligned_sequences", side_effect=_fake_extract), \
+                 patch("viral_phylo.alignment.align_structures", side_effect=_fake_align), \
+                 patch("viral_phylo.clustering.mmseqs_cluster", side_effect=_fake_mmseqs):
+                out_both = os.path.join(tmpdir, "aln_both")
+                summary_both = partition_structures_by_similarity(
+                    pdb_dir,
+                    out_both,
+                    mode="sequence_plm",
+                    embeddings_npz=npz_path,
+                    plm_algorithm="kmeans",
+                    plm_k=None,
+                    plm_k_min=2,
+                    plm_k_max=5,
+                    min_cluster_size=5,
+                )
+                self.assertEqual(summary_both["modes_run"], ["sequence", "plm"])
+                self.assertEqual(summary_both["num_clusters"], 6)
+                self.assertTrue(os.path.isdir(os.path.join(out_both, "cluster_mmseqs_1_id0.5", "structures")))
+                self.assertTrue(os.path.isdir(os.path.join(out_both, "cluster_plm_1_k3", "structures")))
+                self.assertTrue(os.path.isfile(os.path.join(out_both, "multi_alignment_summary_sequence.json")))
+                self.assertTrue(os.path.isfile(os.path.join(out_both, "multi_alignment_summary_plm.json")))
+                comp = summary_both["comparison"]
+                self.assertIn("sequence", comp["modes"])
+                self.assertIn("plm", comp["modes"])
+                self.assertAlmostEqual(
+                    comp["pairwise_agreement"]["sequence_vs_plm"]["adjusted_rand_index"], 1.0
+                )

@@ -1,9 +1,32 @@
 """3Di substitution matrices and model parameter management."""
 
+import atexit
 import os
 import shutil
 import urllib.request
-from typing import Dict, Any
+from typing import Dict, Any, Set
+
+_CREATED_ALIAS_FILES: Set[str] = set()
+_CREATED_ALIAS_DIRS: Set[str] = set()
+
+
+def _cleanup_uppercase_aliases() -> None:
+    """Remove temporary uppercase matrix aliases created for IQ-TREE ``-mset``."""
+    for fpath in list(_CREATED_ALIAS_FILES):
+        try:
+            if os.path.isfile(fpath):
+                os.remove(fpath)
+        except OSError:
+            pass
+    for dpath in list(_CREATED_ALIAS_DIRS):
+        try:
+            if os.path.isdir(dpath) and not os.listdir(dpath):
+                os.rmdir(dpath)
+        except OSError:
+            pass
+
+
+atexit.register(_cleanup_uppercase_aliases)
 
 EDMOND_MATRICES: Dict[str, Dict[str, Any]] = {
     "alphafold": {
@@ -94,7 +117,10 @@ def uppercase_matrix_alias(matrix_path: str) -> str:
             continue
         target = os.path.join("MATRICES", os.path.basename(part).upper())
         try:
-            os.makedirs("MATRICES", exist_ok=True)
+            alias_dir = os.path.abspath("MATRICES")
+            if not os.path.isdir(alias_dir):
+                os.makedirs(alias_dir, exist_ok=True)
+                _CREATED_ALIAS_DIRS.add(alias_dir)
             if os.path.exists(target) and os.path.samefile(part, target):
                 aliases.append(target)          # case-insensitive filesystem
                 continue
@@ -108,6 +134,7 @@ def uppercase_matrix_alias(matrix_path: str) -> str:
                 tmp = f"{target}.tmp.{os.getpid()}"
                 shutil.copyfile(part, tmp)
                 os.replace(tmp, target)
+                _CREATED_ALIAS_FILES.add(os.path.abspath(target))
             aliases.append(target)
         except OSError as exc:
             print(f"[IQ-TREE] [!] Notice: could not create an upper-case alias for '{part}' ({exc}); "

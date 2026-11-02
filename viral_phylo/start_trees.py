@@ -130,8 +130,13 @@ def make_start_tree(
     matrix_path: Optional[str] = None,
     threads: str = "8",
     seed: int = 1,
+    guide_method: str = "fasttree",
 ) -> Dict[str, Any]:
-    """Build, repair and validate a FastTree starting tree for one IQ-TREE run.
+    """Build, repair and validate a starting/guide tree for one IQ-TREE run.
+
+    ``guide_method`` is "fasttree" (builds an approximate-ML starting tree with
+    VeryFastTree/FastTree) or "foldmason" (reads the FoldMason progressive guide
+    tree ``foldmason.fasta.nw`` from the alignment directory).
 
     ``alphabet`` is "3di" (uses ``matrix_path`` via -trans, matching IQ-TREE's
     Q.3Di model) or "aa" (LG, matching IQ-TREE's LG). Returns a record with
@@ -140,8 +145,11 @@ def make_start_tree(
     from viral_phylo.binaries import find_fasttree_bin
     from viral_phylo.matrices import paml_to_fasttree_trans
 
-    record: Dict[str, Any] = {"used": False, "path": None, "reason": None, "command": None,
-                              "polytomies_resolved": 0, "alphabet": alphabet, "seed": seed}
+    record: Dict[str, Any] = {
+        "used": False, "path": None, "reason": None, "command": None,
+        "polytomies_resolved": 0, "alphabet": alphabet, "seed": seed,
+        "guide_method": guide_method, "source": guide_method,
+    }
     try:
         from Bio import Phylo
     except ImportError:
@@ -149,39 +157,60 @@ def make_start_tree(
         # caller then runs IQ-TREE unguided rather than failing.
         record["reason"] = "Biopython is not installed, so a starting tree cannot be repaired"
         return record
-    binary = find_fasttree_bin()
-    if not binary:
-        record["reason"] = "no FastTree/VeryFastTree binary found"
-        return record
 
     os.makedirs(os.path.dirname(os.path.abspath(out_path)) or ".", exist_ok=True)
-    if alphabet == "3di" and matrix_path:
-        trans = paml_to_fasttree_trans(matrix_path, out_path + ".trans")
-        model = ["-trans", trans]
+
+    if guide_method == "foldmason":
+        aln_dir = os.path.dirname(os.path.abspath(alignment))
+        cand_nw = os.path.join(aln_dir, "foldmason.fasta.nw")
+        record["command"] = f"foldmason guide tree ({cand_nw})"
+        if not os.path.isfile(cand_nw):
+            record["reason"] = f"FoldMason guide tree not found at '{cand_nw}'"
+            return record
+        try:
+            with open(cand_nw, "r", encoding="utf-8", errors="ignore") as fh:
+                raw_nwk = fh.read().strip()
+        except OSError as exc:
+            record["reason"] = f"could not read FoldMason guide tree: {exc}"
+            return record
+        if not raw_nwk:
+            record["reason"] = "FoldMason guide tree file is empty"
+            return record
     else:
-        model = ["-lg"]
-    cmd = [binary, *model, "-gamma"]
-    if "veryfasttree" in os.path.basename(binary).lower():
-        cmd.append("-double-precision")
-        if str(threads).isdigit():
-            cmd += ["-threads", str(threads)]
-    cmd.append(alignment)
-    record["command"] = " ".join(cmd)
+        binary = find_fasttree_bin()
+        if not binary:
+            record["reason"] = "no FastTree/VeryFastTree binary found"
+            return record
+
+        if alphabet == "3di" and matrix_path:
+            trans = paml_to_fasttree_trans(matrix_path, out_path + ".trans")
+            model = ["-trans", trans]
+        else:
+            model = ["-lg"]
+        cmd = [binary, *model, "-gamma"]
+        if "veryfasttree" in os.path.basename(binary).lower():
+            cmd.append("-double-precision")
+            if str(threads).isdigit():
+                cmd += ["-threads", str(threads)]
+        cmd.append(alignment)
+        record["command"] = " ".join(cmd)
+
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=6 * 3600)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
+            record["reason"] = f"FastTree failed: {type(exc).__name__}"
+            return record
+        raw_nwk = proc.stdout.strip()
+        if not raw_nwk:
+            record["reason"] = "FastTree produced no tree"
+            return record
 
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=6 * 3600)
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
-        record["reason"] = f"FastTree failed: {type(exc).__name__}"
-        return record
-    if not proc.stdout.strip():
-        record["reason"] = "FastTree produced no tree"
-        return record
-
-    try:
-        tree = Phylo.read(io.StringIO(proc.stdout), "newick")
+        tree = Phylo.read(io.StringIO(raw_nwk), "newick")
         record["polytomies_resolved"] = resolve_to_binary(tree, seed=seed)
     except Exception as exc:
-        record["reason"] = f"could not parse or repair the FastTree tree: {type(exc).__name__}: {exc}"
+        src_label = "FoldMason" if guide_method == "foldmason" else "FastTree"
+        record["reason"] = f"could not parse or repair the {src_label} tree: {type(exc).__name__}: {exc}"
         return record
 
     problem = validate_start_tree(tree, _alignment_names(alignment))

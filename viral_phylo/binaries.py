@@ -48,6 +48,7 @@ def _find_tool(name: str, override: Optional[str] = None) -> str:
         # python or console script is invoked by absolute path, conda is not
         # activated and CONDA_PREFIX is unset, but the tools sit right alongside it.
         os.path.join(os.path.dirname(sys.executable), name),
+        os.path.expanduser(f"~/raid/conda_envs/spt/bin/{name}"),
         os.path.expanduser(f"~/miniconda3/envs/spt/bin/{name}"),
         os.path.expanduser(f"~/miniconda3/bin/{name}"),
         f"/opt/homebrew/bin/{name}",
@@ -227,6 +228,7 @@ def find_torch_python() -> str:
         candidates.append(os.path.join(os.environ["CONDA_PREFIX"], "bin", "python"))
     conda_base_hints = [
         os.environ.get("CONDA_PREFIX", ""),
+        os.path.expanduser("~/raid/conda_envs/spt"),
         os.path.expanduser("~/miniconda3"),
         os.path.expanduser("~/anaconda3"),
         os.path.expanduser("~/miniforge3"),
@@ -237,6 +239,8 @@ def find_torch_python() -> str:
     for hint in conda_base_hints:
         if not hint:
             continue
+        if os.path.isfile(os.path.join(hint, "bin", "python")):
+            candidates.append(os.path.join(hint, "bin", "python"))
         base_dir = hint.split("/envs/")[0] if "/envs/" in hint else hint
         candidates.append(os.path.join(base_dir, "envs", "spt", "bin", "python"))
     candidates.append(sys.executable)

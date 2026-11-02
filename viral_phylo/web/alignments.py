@@ -101,6 +101,63 @@ def annotate_alphabet_lengths(node):
                 annotate_alphabet_lengths(value)
     return node
 
+
+def build_workflow_alignment_entry(d: Path) -> Optional[Dict[str, Any]]:
+    """Build an ALIGNMENTS_DATA entry dictionary for a single workflow directory ``d``."""
+    d = Path(d)
+    aln_dir = d / "alignment"
+    if not aln_dir.exists():
+        return None
+    c3 = aln_dir / "foldmason.fasta_3di.fa"
+    if not c3.exists():
+        c3 = aln_dir / "mafft.fasta_3di.fa"
+    ca = aln_dir / "foldmason.fasta_aa.fa"
+    if not ca.exists():
+        ca = aln_dir / "mafft.fasta_aa.fa"
+
+    custom_3di = parse_fasta(c3) if c3.exists() else {}
+    custom_aa = parse_fasta(ca) if ca.exists() else {}
+    partitions = find_cluster_partitions(aln_dir)
+
+    if not (custom_3di and custom_aa) and partitions:
+        first_p = next(iter(partitions.values()))
+        custom_3di = first_p.get("3di", {})
+        custom_aa = first_p.get("aa", {})
+
+    if not custom_3di or not custom_aa:
+        return None
+
+    custom_len = len(next(iter(custom_3di.values())))
+    entry = {
+        "length": custom_len,
+        "taxa_count": len(custom_3di),
+        "aa": custom_aa,
+        "3di": custom_3di,
+        "coverage": compute_cov_dict(custom_3di, custom_len),
+        "partitions": partitions,
+    }
+    return annotate_alphabet_lengths(entry)
+
+
+def write_workflow_alignments_bundle(d: Path, out_js: Optional[Path] = None) -> Optional[Path]:
+    """Write a self-contained ``alignments_data.js`` bundle for workflow directory ``d``."""
+    d = Path(d)
+    entry = build_workflow_alignment_entry(d)
+    if not entry:
+        return None
+    key = d.name
+    payload = {key: entry}
+    target = Path(out_js) if out_js else (d / "alignments_data.js")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    js_content = (
+        "window.ALIGNMENTS_DATA = Object.assign(window.ALIGNMENTS_DATA || {}, "
+        + json.dumps(payload)
+        + ");\n"
+    )
+    target.write_text(js_content, encoding="utf-8")
+    return target
+
+
 def build_alignments_data(repo_dir: Optional[Path] = None, results_dir: Optional[Path] = None) -> Dict[str, Any]:
     """Generate alignments_data.js for all datasets and write to standard targets."""
     if repo_dir is None:
@@ -219,26 +276,10 @@ def build_alignments_data(repo_dir: Optional[Path] = None, results_dir: Optional
     for d in _iter_result_dirs(results_dir):
         if not d.is_dir() or d.name.startswith(".") or d.name in known_core_aln:
             continue
-        c3 = d / "alignment/foldmason.fasta_3di.fa"
-        if not c3.exists():
-            c3 = d / "alignment/mafft.fasta_3di.fa"
-        ca = d / "alignment/foldmason.fasta_aa.fa"
-        if not ca.exists():
-            ca = d / "alignment/mafft.fasta_aa.fa"
-        if c3.exists() and ca.exists():
-            custom_3di = parse_fasta(c3)
-            custom_aa = parse_fasta(ca)
-            if custom_3di and custom_aa:
-                custom_len = len(next(iter(custom_3di.values())))
-                print(f"Auto-discovered alignment for custom workflow: {d.name} ({len(custom_3di)} taxa, {custom_len} cols)")
-                alignments[d.name] = {
-                    "length": custom_len,
-                    "taxa_count": len(custom_3di),
-                    "aa": custom_aa,
-                    "3di": custom_3di,
-                    "coverage": compute_cov_dict(custom_3di, custom_len),
-                    "partitions": find_cluster_partitions(d / "alignment")
-                }
+        entry = build_workflow_alignment_entry(d)
+        if entry:
+            print(f"Auto-discovered alignment for custom workflow: {d.name} ({entry['taxa_count']} taxa, {entry['length']} cols)")
+            alignments[d.name] = entry
 
     annotate_alphabet_lengths(alignments)
     js_content = "window.ALIGNMENTS_DATA = " + json.dumps(alignments) + ";\n"
@@ -249,16 +290,6 @@ def build_alignments_data(repo_dir: Optional[Path] = None, results_dir: Optional
     with open(master_file, "w", encoding="utf-8") as f:
         f.write(js_content)
     print(f"Generated global master alignments bundle: {master_file} ({len(js_content)} bytes)")
-
-    # Convenience symlink from repo root
-    root_link = repo_dir / "alignments_data.js"
-    try:
-        if root_link.is_symlink() or root_link.exists():
-            root_link.unlink()
-        rel_target = os.path.relpath(master_file, repo_dir)
-        root_link.symlink_to(rel_target)
-    except OSError:
-        pass
 
     extra_dir = os.environ.get("ANTIGRAVITY_ARTIFACT_DIR")
     if extra_dir and Path(extra_dir).exists():

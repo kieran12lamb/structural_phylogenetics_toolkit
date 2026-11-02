@@ -138,6 +138,9 @@ def run_tree_jobs(jobs: List[Dict[str, Any]], max_parallel: int,
                 _signal_group(proc, signal.SIGKILL)
         raise
     finally:
-        pool.shutdown(wait=True, cancel_futures=True)
+        try:
+            pool.shutdown(wait=True, cancel_futures=True)
+        except TypeError:
+            pool.shutdown(wait=True)
     order = {job["name"]: i for i, job in enumerate(ordered)}
     return sorted(results, key=lambda r: order[r["name"]])
